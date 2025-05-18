@@ -5,10 +5,12 @@ embed_dir=os.path.join(os.getcwd(),'embed_file')
 
 def bin_value(value, bitsize=8):
     binval = bin(value)[2:]
+    # bin是把十进制数转化为二进制形式的字符串，前面有个0b表示二进制，所以要去掉
     if len(binval) > bitsize:
         print("Larger than the expected size")
     while len(binval) < bitsize:
         binval = "0" + binval
+        # 循环在字符串前面拼接0，直到字符串长度为bitsize
     return binval
 
 def embed(input, watermark_str):

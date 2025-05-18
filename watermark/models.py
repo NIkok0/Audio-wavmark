@@ -1,6 +1,6 @@
-from database import db
-from flask_login import UserMixin#用户会话管理
 
+from flask_login import UserMixin#用户会话管理
+from watermark import  db
 
 class Users(db.Model,UserMixin):
     __tablename__ = 'users'

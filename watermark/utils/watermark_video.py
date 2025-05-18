@@ -2,7 +2,7 @@ FFMPEG_BIN = "ffmpeg.exe"
 
 import subprocess as sp#调用外部程序
 import numpy
-import robust
+import watermark.utils.robust
 import os
 
 #embed_dir

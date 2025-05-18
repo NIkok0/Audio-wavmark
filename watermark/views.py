@@ -1,48 +1,27 @@
+
 from flask import render_template, Flask, redirect, url_for, request,flash
 from flask_bootstrap import Bootstrap
-from forms.login_form import LoginForm
-from forms.watermark_form import WatermarkForm
-from forms.register_form import RegisterForm
+from watermark.forms.login_form import LoginForm
+from watermark.forms.watermark_form import WatermarkForm
+from watermark.forms.register_form import RegisterForm
 import os
-from database import connect_database
-from table_users import Users
-from database import db
+from watermark.models import Users
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from flask_login import login_user, login_required
 from flask_login import LoginManager, current_user
 from flask_login import logout_user
-from flask_dropzone import Dropzone
-from watermarkSystem import *
+
+from watermark.watermarkSystem import watermarks_select
 from flask import send_from_directory
 import json
-
-app=connect_database()
-db.init_app(app)
-bootstrap = Bootstrap(app)
-dropzone = Dropzone()
-dropzone.init_app(app)
-
-# app.secret_key = os.urandom(24)
-app.secret_key = "Bianca"
+from watermark import app, db
 
 upload_dir=os.path.join(os.getcwd(),'upload')
 upload_for_extract_dir=os.path.join(os.getcwd(),'extract_file')
 
 if not os.path.exists(upload_dir):
     os.makedirs(upload_dir,mode=0o755)
-
-# use login manager to manage session
-login_manager = LoginManager()
-login_manager.session_protection = 'strong'
-login_manager.login_view = 'signin'
-login_manager.init_app(app=app)
-
-# 这个callback函数用于reload User object，根据session中存储的user id
-#加载用户的回调函数接受以Unicode表示的用户标志符。如果能找到用户，这个函数必须返回用户对象，否则返回None
-@login_manager.user_loader
-def load_user(id):
-    return db.session.query(Users).get(id)
 
 #主页
 @app.route('/', methods=['GET', 'POST'])
@@ -120,15 +99,15 @@ def add_watermark():
             if list[len(list)-1] in ['png', 'jpg', 'jpeg', 'bmp']:
                 file_name = file.split("\\")[-1] + "_embed.bmp"
                 maps.append(file_name)
-                watermark("image", "embed", file, form.watermark.data)
+                watermarks_select("image", "embed", file, form.watermark.data)
             if list[len(list)-1] in ['wav']:
                 file_name = file.split("\\")[-1] + "_embed.wav"
                 maps.append(file_name)
-                watermark("audio", "embed", file, form.watermark.data)
+                watermarks_select("audio", "embed", file, form.watermark.data)
             if list[len(list)-1] in ['mxf']:
                 file_name = file.split("\\")[-1] + "_embed.ts"
                 maps.append(file_name)
-                watermark("video", "embed", file, form.watermark.data)
+                watermarks_select("video", "embed", file, form.watermark.data)
         for file in files:
             if file.split('.')[len(file.split('.'))-1] in ['png', 'jpg', 'jpeg', 'bmp']:
                 os.remove(file.split("\\")[-1]+".bmp")
@@ -189,15 +168,15 @@ def extract_watermark():
             list = file.split('.')
             if list[len(list)-1] in ['png', 'jpg', 'jpeg', 'bmp']:
                 file_name = file.split("\\")[-1]
-                result=watermark("image", "extract", file)
+                result=watermarks_select("image", "extract", file)
                 maps[file_name]=result
             if list[len(list)-1] in ['wav']:
                 file_name = file.split("\\")[-1]
-                result = watermark("audio", "extract", file)
+                result = watermarks_select("audio", "extract", file)
                 maps[file_name] = result
             if list[len(list)-1] in ['mxf']:
                 file_name = file.split("\\")[-1]
-                result = watermark("video", "extract", file)
+                result = watermarks_select("video", "extract", file)
                 maps[file_name] = result
         flash("水印提取结果为：")
         extract_files.clear()
@@ -217,6 +196,3 @@ def filelist2():
     maps = json.loads(js)
     file.close()
     return render_template('extract_watermark.html', files=maps)
-
-if __name__ == '__main__':    
-    app.run(debug=True)
