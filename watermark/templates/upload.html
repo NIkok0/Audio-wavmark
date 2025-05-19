@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}上传文件 - 数字水印系统{% endblock %}
+
+{% block styles %}
+{{super()}}
+<style>
+    .upload-container {
+        max-width: 800px;
+        margin: 30px auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .upload-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .upload-header h1 {
+        font-size: 24px;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    .upload-zone {
+        padding: 40px;
+        border: 2px dashed #ddd;
+        text-align: center;
+        margin-bottom: 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .upload-zone:hover {
+        border-color: #3498db;
+        background-color: #f9f9f9;
+    }
+    .upload-icon {
+        font-size: 48px;
+        color: #95a5a6;
+        margin-bottom: 15px;
+    }
+    .instructions {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        border-left: 4px solid #3498db;
+    }
+    #file-input {
+        display: none;
+    }
+    .progress {
+        display: none;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="upload-container">
+    <div class="upload-header">
+        <h1>上传文件</h1>
+        <p class="text-muted">请选择需要添加水印的文件</p>
+    </div>
+    
+    <div class="upload-zone" id="dropZone">
+        <i class="glyphicon glyphicon-cloud-upload upload-icon"></i>
+        <h3>拖放文件到此处或点击上传</h3>
+        <p class="text-muted">支持的格式：PNG, JPG, JPEG, BMP, MP3, MP4, WAV, MXF</p>
+        <form id="upload-form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+            <input type="file" id="file-input" name="file" accept=".png,.jpg,.jpeg,.bmp,.mp3,.mp4,.wav,.mxf">
+            <button type="button" class="btn btn-primary" id="select-file-btn">
+                <i class="glyphicon glyphicon-folder-open"></i> 选择文件
+            </button>
+        </form>
+    </div>
+    
+    <div class="progress">
+        <div class="progress-bar progress-bar-striped active" role="progressbar" style="width: 0%">
+            0%
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h4><i class="glyphicon glyphicon-info-sign"></i> 使用说明</h4>
+        <ul>
+            <li>选择或拖拽文件后，系统会自动上传文件</li>
+            <li>上传成功后，将跳转到水印添加页面</li>
+            <li>支持的文件格式：PNG, JPG, JPEG, BMP, MP3, MP4, WAV, MXF</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{super()}}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('file-input');
+        const form = document.getElementById('upload-form');
+        const selectBtn = document.getElementById('select-file-btn');
+        const progressBar = document.querySelector('.progress-bar');
+        const progress = document.querySelector('.progress');
+        
+        // 点击按钮选择文件
+        selectBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        // 整个区域可点击
+        dropZone.addEventListener('click', function(e) {
+            if (e.target !== selectBtn) {
+                fileInput.click();
+            }
+        });
+        
+        // 处理文件选择
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                uploadFile(this.files[0]);
+            }
+        });
+        
+        // 处理拖放
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.borderColor = '#3498db';
+            this.style.backgroundColor = '#f0f8ff';
+        });
+        
+        dropZone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.borderColor = '#ddd';
+            this.style.backgroundColor = '';
+        });
+        
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.borderColor = '#ddd';
+            this.style.backgroundColor = '';
+            
+            if (e.dataTransfer.files.length > 0) {
+                uploadFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        // 上传文件
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', form.action);
+            
+            // 显示进度条
+            progress.style.display = 'block';
+            
+            // 更新上传进度
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percentComplete + '%';
+                    progressBar.textContent = percentComplete + '%';
+                }
+            });
+            
+            // 处理上传完成
+            xhr.onload = function() {
+                if (xhr.status === 200 || xhr.status === 302) {
+                    window.location.href = '{{ url_for("add_watermark") }}';
+                } else {
+                    alert('上传失败: ' + xhr.responseText);
+                    progress.style.display = 'none';
+                }
+            };
+            
+            xhr.onerror = function() {
+                alert('上传出错，请重试');
+                progress.style.display = 'none';
+            };
+            
+            xhr.send(formData);
+        }
+    });
+</script>
+{% endblock %} 

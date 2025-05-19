@@ -1,12 +1,57 @@
 {% extends "bootstrap/base.html" %}
 
 {% block title %}数字水印系统{% endblock %}
+
+{% block styles %}
+{{super()}}
+<style>
+    .navbar-brand {
+        font-weight: bold;
+    }
+    .navbar-inverse {
+        background-color: #2c3e50;
+        border-color: #2c3e50;
+    }
+    .navbar-inverse .navbar-nav > li > a,
+    .navbar-inverse .navbar-brand {
+        color: #ecf0f1;
+    }
+    .navbar-inverse .navbar-nav > li > a:hover,
+    .navbar-inverse .navbar-brand:hover {
+        color: #3498db;
+    }
+    .container {
+        margin-top: 20px;
+    }
+    .alert {
+        margin-top: 20px;
+    }
+    .footer {
+        margin-top: 50px;
+        padding: 20px 0;
+        background-color: #f5f5f5;
+        border-top: 1px solid #ddd;
+        text-align: center;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+    }
+    .main-content {
+        margin-bottom: 100px;
+    }
+    .user-info {
+        color: #ecf0f1;
+        padding: 15px;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
 {% block navbar %}
 <div class="navbar navbar-inverse" role="navigation">
     <div class="container">
         <div class="navbar-header">
-            <button type="button" class="navbar-toggle"
-             data-toggle="collapse" data-target=".navbar-collapse">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
                 <span class="sr-only">Toggle navigation</span>
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
@@ -16,14 +61,22 @@
         </div>
         <div class="navbar-collapse collapse">
             <ul class="nav navbar-nav">
-                 <li><a href="/">Home</a></li>
+                <li><a href="{{ url_for('index') }}"><i class="glyphicon glyphicon-home"></i> 首页</a></li>
                 {% if current_user.is_authenticated %}
-                    <li><a href="./signout.html">登出</a></li>
-                    <li><a href="./add_watermark.html">添加水印</a></li>
-                    <li><a href="./extract_watermark.html">提取水印</a></li>
+                    <li><a href="{{ url_for('add_watermark') }}"><i class="glyphicon glyphicon-plus"></i> 添加水印</a></li>
+                    <li><a href="{{ url_for('extract_watermark') }}"><i class="glyphicon glyphicon-search"></i> 提取水印</a></li>
+                    {% if current_user.is_admin %}
+                    <li><a href="{{ url_for('admin_dashboard') }}"><i class="glyphicon glyphicon-dashboard"></i> 管理面板</a></li>
+                    {% endif %}
+                {% endif %}
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+                {% if current_user.is_authenticated %}
+                    <li><span class="user-info"><i class="glyphicon glyphicon-user"></i> {{ current_user.username }}</span></li>
+                    <li><a href="{{ url_for('signout') }}"><i class="glyphicon glyphicon-log-out"></i> 登出</a></li>
                 {% else %}
-                    <li><a href="./register.html">注册</a></li>
-                    <li><a href="./signin.html">登录</a></li>
+                    <li><a href="{{ url_for('register') }}"><i class="glyphicon glyphicon-user"></i> 注册</a></li>
+                    <li><a href="{{ url_for('signin') }}"><i class="glyphicon glyphicon-log-in"></i> 登录</a></li>
                 {% endif %}
             </ul>
         </div>
@@ -32,13 +85,38 @@
 {% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container main-content">
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-info alert-dismissible" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                {{ message }}
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
     {% block page_content %}{% endblock %}
 </div>
 
+<footer class="footer">
+    <div class="container">
+        <p>&copy; 2025 数字水印系统 by HYR. All rights reserved.</p>
+    </div>
+</footer>
+{% endblock %}
 
-<div id="footer" style="text-align: center">
-    &copy; Copyright 2025 by HYR.
-</div>
-
+{% block scripts %}
+{{ super() }}
+<script>
+    // 自动关闭警告消息
+    window.setTimeout(function() {
+        $(".alert").fadeTo(500, 0).slideUp(500, function(){
+            $(this).remove(); 
+        });
+    }, 3000);
+</script>
 {% endblock %}

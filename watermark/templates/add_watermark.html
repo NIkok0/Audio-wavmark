@@ -1,56 +1,267 @@
 {% extends "base.html" %}
-{% block title %} - Embed Watermark - {% endblock %}
+{% import "bootstrap/wtf.html" as wtf %}
 
-{%- block styles %}
-    <link rel="stylesheet" type="text/css" href="/static/css/custom.css" />
-    {{ dropzone.load_css() }}
-    <link href="{{bootstrap_find_resource('css/bootstrap.css', cdn='bootstrap')}}" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/lib/dropzone.min.css">
-    <link rel="stylesheet" href="/static/css/common.css">
-    {{ dropzone.style('border: 2px dashed #0087F7; margin: 10%') }}
-{%- endblock styles %}
+{% block title %}添加水印 - 数字水印系统{% endblock %}
+
+{% block styles %}
+{{super()}}
+<style>
+    .watermark-container {
+        max-width: 800px;
+        margin: 30px auto;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .watermark-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .watermark-header h1 {
+        font-size: 24px;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    .upload-section {
+        text-align: center;
+        padding: 30px;
+        border: 2px dashed #ddd;
+        border-radius: 5px;
+        margin-bottom: 30px;
+    }
+    .upload-section:hover {
+        border-color: #3498db;
+    }
+    .file-list {
+        margin-top: 30px;
+    }
+    .file-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .file-item:hover {
+        background-color: #f9f9f9;
+    }
+    .file-info {
+        flex-grow: 1;
+    }
+    .file-actions {
+        margin-left: 15px;
+    }
+    .progress {
+        margin-top: 10px;
+        display: none;
+    }
+    #dropZone {
+        min-height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+    .upload-icon {
+        font-size: 48px;
+        color: #95a5a6;
+        margin-bottom: 10px;
+    }
+    .section-title {
+        margin: 30px 0 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        font-size: 18px;
+    }
+    .empty-list {
+        text-align: center;
+        padding: 20px;
+        color: #95a5a6;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+    }
+</style>
+{% endblock %}
 
 {% block page_content %}
-<div class="page-header">
-
-    {% if form %}
-    {{ dropzone.create(action="/upload") }}
-    {{ dropzone.load_js() }}
-    {{ dropzone.config() }}
-    <form action="/add_watermark.html" method="post" enctype="multipart/form-data">
-        <div class="form-group">
-            {{ form.watermark.label }}
-            {{ form.watermark(class_="form-control") }}
-        </div>
-        <p>{{ form.csrf_token }}</p>
-        <input class="btn btn-primary" type="submit" value="Submit">
-    </form>
-    {% endif %}
-    <div class="msg">
-        {% for message in get_flashed_messages() %}
-            {% if message %}
-                {{ message }}
-                <br><br>
-                {% for v in files %}
-                    <tr><td><a href="/download/{{v}}">{{v}} </a> </td></tr>
-                    <br>
-                {% endfor %}
-            {% endif %}
-        {% endfor %}
+<div class="watermark-container">
+    <div class="watermark-header">
+        <h1>添加水印</h1>
+        <p class="text-muted">支持图片、音频和视频文件的水印添加</p>
     </div>
 
+    <div class="upload-section">
+        <div id="dropZone">
+            <i class="glyphicon glyphicon-cloud-upload upload-icon"></i>
+            <p class="lead">拖拽文件到这里或点击选择文件</p>
+            <p class="text-muted">支持的格式：PNG, JPG, JPEG, BMP, MP3, MP4, WAV, MXF</p>
+            <form id="uploadForm" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+                <input type="file" id="fileInput" name="file" style="display: none;" accept=".png,.jpg,.jpeg,.bmp,.mp3,.mp4,.wav,.mxf">
+                <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
+                    <i class="glyphicon glyphicon-folder-open"></i> 选择文件
+                </button>
+            </form>
+        </div>
+        <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+        </div>
+    </div>
+
+    <!-- 显示未添加水印的文件列表 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-file"></i> 待添加水印的文件</h3>
+    {% if original_files %}
+    <div class="file-list">
+        {% for file in original_files %}
+        <div class="file-item">
+            <div class="file-info">
+                <i class="glyphicon glyphicon-file"></i>
+                <span>{{ file.filename }}</span>
+                <small class="text-muted">上传时间：{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+            </div>
+            <div class="file-actions">
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此文件吗？');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-list">
+        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无待添加水印的文件</p>
+    </div>
+    {% endif %}
+
+    {% if form and original_files %}
+    <div class="watermark-form">
+        <h3 class="section-title"><i class="glyphicon glyphicon-pencil"></i> 水印信息</h3>
+        <form method="POST" action="{{ url_for('add_watermark') }}">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.watermark.label }}
+                {{ form.watermark(class="form-control", placeholder="请输入要嵌入的水印内容") }}
+            </div>
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-primary btn-lg") }}
+            </div>
+        </form>
+    </div>
+    {% elif form and not original_files %}
+    <div class="alert alert-info">
+        <i class="glyphicon glyphicon-info-sign"></i> 请先上传文件，然后再添加水印
+    </div>
+    {% endif %}
+
+    <!-- 显示已添加水印的文件列表 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-ok-circle"></i> 已添加水印的文件</h3>
+    {% if watermarked_files %}
+    <div class="file-list">
+        {% for file in watermarked_files %}
+        <div class="file-item">
+            <div class="file-info">
+                <i class="glyphicon glyphicon-file"></i>
+                <span>{{ file.filename }}</span>
+                <small class="text-muted">处理时间：{{ file.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+            </div>
+            <div class="file-actions">
+                <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-success">
+                    <i class="glyphicon glyphicon-download-alt"></i> 下载
+                </a>
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此文件吗？');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-list">
+        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已添加水印的文件</p>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
-    <script src="{{bootstrap_find_resource('jquery.js', cdn='jquery')}}"></script>
-    <script src="{{bootstrap_find_resource('js/bootstrap.js', cdn='bootstrap')}}"></script>
-    <script src="/static/js/lib/jquery-3.2.1.slim.min.js"></script>
-    <script src="/static/js/lib/popper.min.js"></script>
-    <script src="/static/js/lib/bootstrap.min.js"></script>
-    <script src="/static/js/lib/dropzone.min.js"></script>
-    <script src="/static/js/common.js"></script>
-{%- endblock scripts %}
+{{super()}}
+<script>
+    // 文件拖拽上传
+    var dropZone = document.getElementById('dropZone');
+    var fileInput = document.getElementById('fileInput');
+    var uploadForm = document.getElementById('uploadForm');
+    var progressBar = document.querySelector('.progress');
+    var progressBarInner = document.querySelector('.progress-bar');
+
+    // 处理拖拽事件
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.style.borderColor = '#3498db';
+    });
+
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.style.borderColor = '#ddd';
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.style.borderColor = '#ddd';
+        
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            uploadFile(files[0]);
+        }
+    });
+
+    // 处理文件选择
+    fileInput.addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            uploadFile(this.files[0]);
+        }
+    });
+
+    // 上传文件
+    function uploadFile(file) {
+        var formData = new FormData();
+        formData.append('file', file);
+
+        progressBar.style.display = 'block';
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadForm.action, true);
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var percentComplete = (e.loaded / e.total) * 100;
+                progressBarInner.style.width = percentComplete + '%';
+                progressBarInner.textContent = Math.round(percentComplete) + '%';
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                window.location.href = "{{ url_for('add_watermark') }}";
+            } else {
+                alert('上传失败：' + xhr.responseText);
+                progressBar.style.display = 'none';
+            }
+        };
+
+        xhr.send(formData);
+    }
+</script>
+{% endblock %}
 
 
 

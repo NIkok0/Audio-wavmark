@@ -26,9 +26,16 @@ def embed(input, watermark):
     row, col = im_array.shape
     im_array_flatten = im_array.flatten()  # 转化为一位数组
 
-    data_string = watermark
-    data_length = len(data_string)
-    bindata = bin_value(data_length, 8)  # 把要嵌入的水印都转化为8位二进制
+    # 将水印字符串转换为UTF-8编码的字节
+    data_bytes = watermark.encode('utf-8')
+    # 存储字节数而不是字符数
+    data_length = len(data_bytes)
+    
+    # 检查图像容量是否足够
+    if row * col < 8 + data_length * 8:
+        raise ValueError(f"图像容量不足，无法嵌入长度为{data_length}字节的水印")
+        
+    bindata = bin_value(data_length, 32)  # 使用32位来存储长度，支持更长的水印
 
     index = 0  #
     for c in bindata:  # 把长度嵌入
@@ -38,8 +45,8 @@ def embed(input, watermark):
             im_array_flatten[index] = im_array_flatten[index] | 1
         index += 1
 
-    for char in data_string:  # 把内容嵌入
-        for c in bin_value(ord(char), 8):
+    for byte in data_bytes:  # 把内容嵌入（处理字节而不是字符）
+        for c in bin_value(byte, 8):
             if int(c) == 0:
                 im_array_flatten[index] = im_array_flatten[index] & 254
             else:
@@ -60,9 +67,11 @@ def extract(input):
     im = Image.open(input)
     im_array = array(im)  # 转化为数组
     im_array_flatten = im_array.flatten()  # 转化为一位数组
+    
+    # 提取水印长度（32位）
     str_length = ''
     index = 0
-    while index < 8:  # 提取长度
+    while index < 32:  # 提取长度（修改为32位）
         if im_array_flatten[index] == im_array_flatten[index] & 254:
             str_length = str_length + '0'
         else:
@@ -70,19 +79,25 @@ def extract(input):
         index += 1
 
     length = int(str_length, 2)
-    # 提取水印
-    result = ''
-    while index < 8 + length * 8:
-        char_binary_string = ''
-        for c in range(0, 8):
-            if im_array_flatten[index] == im_array_flatten[index] & 254:
-                char_binary_string = char_binary_string + '0'
-            else:
-                char_binary_string = char_binary_string + '1'
+    
+    # 提取水印字节
+    bytes_data = bytearray()
+    for i in range(length):
+        byte_value = 0
+        for bit_position in range(8):
+            bit = 0
+            if im_array_flatten[index] & 1:
+                bit = 1
+            byte_value = (byte_value << 1) | bit
             index += 1
-
-        char = chr(int(char_binary_string, 2))
-        result += char
+        bytes_data.append(byte_value)
+    
+    # 将字节转换回UTF-8字符串
+    try:
+        result = bytes_data.decode('utf-8')
+    except UnicodeDecodeError:
+        # 解码失败时尝试其他编码或返回错误信息
+        result = "水印解码失败，可能是损坏的数据"
 
     print(result)
     return result
