@@ -5,3 +5,9 @@ venv/
 instance/
 hyr.session.sql
 .vscode
+upload/
+testfile/
+embed_file/
+extracted_file/
+
+
