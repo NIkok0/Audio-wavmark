@@ -1,64 +1,416 @@
-{% extends "base.html" %}
-{% import "bootstrap/wtf.html" as wtf %}
-
-{% block title %}登录 - 数字水印系统{% endblock %}
-
-{% block styles %}
-{{super()}}
-<style>
-    .login-container {
-        max-width: 400px;
-        margin: 50px auto;
-        padding: 20px;
-        background-color: #fff;
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    .login-header {
-        text-align: center;
-        margin-bottom: 30px;
-    }
-    .login-header h1 {
-        font-size: 24px;
-        color: #2c3e50;
-        margin-bottom: 10px;
-    }
-    .login-form {
-        margin-bottom: 20px;
-    }
-    .register-link {
-        text-align: center;
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #eee;
-    }
-</style>
-{% endblock %}
-
-{% block page_content %}
-<div class="login-container">
-    <div class="login-header">
-        <h1>用户登录</h1>
-        <p class="text-muted">欢迎回来，请登录您的账号</p>
-    </div>
-    
-    <div class="login-form">
-        <form method="POST" action="{{ url_for('signin') }}">
-            {{ form.hidden_tag() }}
-            <div class="form-group">
-                {{ form.username_or_email.label }}
-                {{ form.username_or_email(class="form-control", placeholder="请输入用户名或邮箱") }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 数字水印系统</title>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Open Sans', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .card-pf {
+            width: 100%;
+            max-width: 500px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .login-pf-header {
+            text-align: center;
+            padding: 30px 20px 20px;
+            border-bottom: 1px solid #eee;
+            position: relative;
+        }
+        
+        .login-pf-header h1 {
+            font-size: 24px;
+            color: #333;
+            margin: 0;
+            font-weight: 600;
+        }
+        
+        #kc-content {
+            padding: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+            text-align: left;
+        }
+        
+        /* 修复输入框左右间距问题 */
+        .input-container {
+            position: relative;
+            width: 100%;
+        }
+        
+        .pf-c-form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            text-align: left;
+            background-color: #fafafa;
+        }
+        
+        .pf-c-form-control:focus {
+            outline: none;
+            border-color: #4285f4;
+            box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.15);
+            background-color: #fff;
+        }
+        
+        .login-pf-settings {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        
+        .checkbox {
+            margin: 0;
+        }
+        
+        .checkbox label {
+            font-size: 14px;
+            color: #666;
+            margin: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        
+        .checkbox input[type="checkbox"] {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+            accent-color: #4285f4;
+        }
+        
+        .login-pf-settings a {
+            color: #4285f4;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .login-pf-settings a:hover {
+            text-decoration: underline;
+        }
+        
+        .pf-c-button {
+            width: 100%;
+            padding: 14px;
+            background-color: #4285f4;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 5px rgba(66, 133, 244, 0.3);
+        }
+        
+        .pf-c-button:hover {
+            background-color: #3367d6;
+            transform: translateY(-1px);
+        }
+        
+        .pf-c-button:active {
+            transform: translateY(0);
+        }
+        
+        .login-pf-signup {
+            text-align: center;
+            padding-top: 25px;
+            border-top: 1px solid #eee;
+            margin-top: 25px;
+        }
+        
+        .login-pf-signup span {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .login-pf-signup a {
+            color: #4285f4;
+            text-decoration: none;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+        
+        .login-pf-signup a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 输入框图标样式 */
+        .input-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+            font-size: 16px;
+            z-index: 2;
+        }
+        
+        .input-with-icon {
+            padding-left: 40px !important;
+        }
+        
+        /* 错误消息样式 */
+        .error-message {
+            color: #ea4335;
+            font-size: 13px;
+            margin-top: 6px;
+            text-align: left;
+            display: none;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 576px) {
+            #kc-content {
+                padding: 25px 20px;
+            }
+            
+            .login-pf-header {
+                padding: 25px 15px 15px;
+            }
+            
+            .login-pf-header h1 {
+                font-size: 20px;
+            }
+            
+            .pf-c-button {
+                padding: 12px;
+            }
+        }
+        
+        /* 水印系统品牌标识 */
+        .brand-header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .brand-header h2 {
+            color: #4285f4;
+            font-weight: 700;
+            font-size: 28px;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        
+        .brand-header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* 表单错误样式 */
+        .form-group.has-error .pf-c-form-control {
+            border-color: #ea4335;
+            box-shadow: 0 0 0 3px rgba(234, 67, 53, 0.15);
+        }
+        
+        .form-group.has-error .error-message {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="card-pf">
+        <!-- 隐藏的服务器端错误状态变量 -->
+        <div id="server-error" style="display: none;" data-has-error="{{ 'true' if error_message else 'false' }}"></div>
+        
+        <header class="login-pf-header">
+            <div class="brand-header">
+                <h2>数字水印系统</h2>
+                <p>安全、可靠的数字内容保护方案</p>
             </div>
-            <div class="form-group">
-                {{ form.password.label }}
-                {{ form.password(class="form-control", placeholder="请输入密码") }}
+            
+            <h1 id="kc-page-title">登录您的账户</h1>
+        </header>
+        
+        <div id="kc-content">
+            <div id="kc-content-wrapper">
+                <!-- 错误消息显示区域 -->
+                {% if error_message %}
+                <div class="alert alert-danger" style="margin-bottom: 20px; padding: 12px 15px; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; color: #721c24;">
+                    <strong>错误：</strong>{{ error_message }}
+                </div>
+                {% endif %}
+                
+                <div id="kc-form">
+                    <div id="kc-form-wrapper">
+                        <form id="kc-form-login" method="POST" action="{{ url_for('signin') }}" onsubmit="return validateForm()">
+                            {{ form.hidden_tag() }}
+                            
+                            <div class="form-group" id="username-group">
+                                <label for="username" class="pf-c-form__label pf-c-form__label-text">用户名或邮箱</label>
+                                <div class="input-container">
+                                    <span class="input-icon">👤</span>
+                                    {{ form.username_or_email(class="pf-c-form-control input-with-icon", placeholder="请输入用户名或邮箱", autofocus="", id="username") }}
+                                </div>
+                                <div class="error-message" id="username-error">请输入有效的用户名或邮箱</div>
+                            </div>
+                            
+                            <div class="form-group" id="password-group">
+                                <label for="password" class="pf-c-form__label pf-c-form__label-text">密码</label>
+                                <div class="input-container">
+                                    <span class="input-icon">🔒</span>
+                                    {{ form.password(class="pf-c-form-control input-with-icon", placeholder="请输入密码", id="password") }}
+                                </div>
+                                <div class="error-message" id="password-error">密码不能为空</div>
+                            </div>
+                            
+                            <div class="form-group login-pf-settings">
+                                <div id="kc-form-options">
+                                    <div class="checkbox">
+                                        <label>
+                                            <input type="checkbox" id="rememberMe" name="rememberMe"> 记住我
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span><a href="#">忘记密码?</a></span>
+                                </div>
+                            </div>
+                            
+                            <div id="kc-form-buttons" class="form-group">
+                                {{ form.submit(class="pf-c-button pf-m-primary pf-m-block btn-lg", value="登录") }}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="login-pf-signup">
+                    <div id="kc-info-wrapper">
+                        <div id="kc-registration-container">
+                            <div id="kc-registration">
+                                <span>新用户? <a href="{{ url_for('register') }}">立即注册</a></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            {{ form.submit(class="btn btn-primary btn-block") }}
-        </form>
+        </div>
     </div>
-    
-    <div class="register-link">
-        <p>还没有账号？ <a href="{{ url_for('register') }}">立即注册</a></p>
-    </div>
-</div>
-{% endblock %}
+
+    <script>
+        function validateForm() {
+            let isValid = true;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const usernameGroup = document.getElementById('username-group');
+            const passwordGroup = document.getElementById('password-group');
+            const usernameError = document.getElementById('username-error');
+            const passwordError = document.getElementById('password-error');
+            
+            // 重置错误状态
+            usernameGroup.classList.remove('has-error');
+            passwordGroup.classList.remove('has-error');
+            usernameError.style.display = 'none';
+            passwordError.style.display = 'none';
+            
+            // 验证用户名
+            if (!username || username.trim() === '') {
+                usernameGroup.classList.add('has-error');
+                usernameError.style.display = 'block';
+                isValid = false;
+            }
+            
+            // 验证密码
+            if (!password || password.trim() === '') {
+                passwordGroup.classList.add('has-error');
+                passwordError.style.display = 'block';
+                isValid = false;
+            }
+            
+            if (isValid) {
+                // 显示加载状态
+                const submitBtn = document.querySelector('.pf-c-button');
+                submitBtn.disabled = true;
+                submitBtn.value = '登录中...';
+                submitBtn.style.opacity = '0.7';
+            }
+            
+            return isValid;
+        }
+        
+        // 为输入框添加焦点效果
+        const inputs = document.querySelectorAll('.pf-c-form-control');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.parentElement.style.transform = 'translateY(-2px)';
+                // 移除错误状态
+                this.parentElement.parentElement.classList.remove('has-error');
+                const errorElement = this.parentElement.parentElement.querySelector('.error-message');
+                if (errorElement) {
+                    errorElement.style.display = 'none';
+                }
+            });
+            
+            input.addEventListener('blur', function() {
+                this.parentElement.parentElement.style.transform = 'none';
+            });
+        });
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 如果有服务器端错误消息，显示错误状态
+            const serverErrorDiv = document.getElementById('server-error');
+            if (serverErrorDiv && serverErrorDiv.getAttribute('data-has-error') === 'true') {
+                const usernameInput = document.getElementById('username');
+                const passwordInput = document.getElementById('password');
+                
+                if (usernameInput) {
+                    usernameInput.parentElement.parentElement.classList.add('has-error');
+                }
+                if (passwordInput) {
+                    passwordInput.parentElement.parentElement.classList.add('has-error');
+                }
+            }
+            
+            // 如果有表单错误，显示错误状态
+            const formErrors = document.querySelectorAll('.form-group');
+            formErrors.forEach(group => {
+                const input = group.querySelector('.pf-c-form-control');
+                if (input && input.classList.contains('is-invalid')) {
+                    group.classList.add('has-error');
+                    const errorElement = group.querySelector('.error-message');
+                    if (errorElement) {
+                        errorElement.style.display = 'block';
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

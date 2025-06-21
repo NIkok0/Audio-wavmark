@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}添加图片水印 - 数字水印系统{% endblock %}
+
+{% block styles %}
+{{super()}}
+<style>
+    .watermark-container {
+        max-width: 1000px;
+        margin: 30px auto;
+        padding: 30px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .watermark-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .watermark-header h1 {
+        font-size: 24px;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    .file-list {
+        margin-top: 30px;
+    }
+    .file-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .file-item:hover {
+        background-color: #f9f9f9;
+    }
+    .file-item.selected {
+        background-color: #e3f2fd;
+        border-color: #2196f3;
+    }
+    .file-info {
+        flex-grow: 1;
+    }
+    .file-actions {
+        margin-left: 15px;
+    }
+    .section-title {
+        margin: 30px 0 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        font-size: 18px;
+    }
+    .empty-list {
+        text-align: center;
+        padding: 20px;
+        color: #95a5a6;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+    }
+    .batch-actions {
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+    }
+    .file-checkbox {
+        margin-right: 10px;
+    }
+    .selected-files-info {
+        background-color: #e8f5e8;
+        border: 1px solid #4caf50;
+        border-radius: 4px;
+        padding: 10px;
+        margin: 15px 0;
+        display: none;
+    }
+    .watermark-form {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 5px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn:disabled:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none;
+    }
+    .btn[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn.btn-primary[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+    }
+    .btn.btn-primary[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    /* 为超链接按钮添加禁用状态样式 */
+    a.btn.disabled,
+    a.btn[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+        text-decoration: none !important;
+    }
+    a.btn.disabled:hover,
+    a.btn[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+    a.btn.btn-primary.disabled,
+    a.btn.btn-primary[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+        text-decoration: none !important;
+    }
+    a.btn.btn-primary.disabled:hover,
+    a.btn.btn-primary[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="watermark-container">
+    <div style="margin-bottom: 20px; padding: 0 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="{{ url_for('image_extract_watermark') }}" class="btn btn-primary" style="margin-right: 10px; margin-left: -15px;">
+                <i class="glyphicon glyphicon-search"></i> 去提取水印
+            </a>
+            <a href="{{ url_for('image_upload') }}" class="btn btn-success" style="margin-right: 10px;">
+                <i class="glyphicon glyphicon-cloud-upload"></i> 去上传文件
+            </a>
+            <a href="{{ url_for('image_process') }}" class="btn btn-default" style="margin-left: auto;">
+                <i class="glyphicon glyphicon-arrow-left"></i> 返回
+            </a>
+        </div>
+    </div>
+    <div class="watermark-header">
+        <h1>添加图片水印</h1>
+        <p class="text-muted">为您的图片添加数字水印，保护图片版权</p>
+    </div>
+
+
+    <!-- 批量操作 -->
+    {% if files %}
+    <div class="batch-actions">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <label>
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选
+                </label>
+                <span id="selectedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
+
+                <button type="button" class="btn btn-primary btn-sm" onclick="addWatermarkToSelected()" id="addWatermarkBtn" disabled>
+                    <i class="glyphicon glyphicon-tint"></i> 添加水印！
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 显示未添加水印的文件列表 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-picture"></i> 待添加水印的图片</h3>
+    {% if files and files|selectattr('has_watermark', 'equalto', false)|list|length > 0 %}
+    <div class="file-list">
+        {% for file in files %}
+        {% if not file.has_watermark %}
+        <div class="file-item" data-file-id="{{ file.id }}">
+            <div class="file-info">
+                <label style="margin: 0; cursor: pointer;">
+                    <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateSelectedCount()">
+                    <i class="glyphicon glyphicon-picture"></i>
+                    <span>{{ file.filename }}</span>
+                </label>
+                <small class="text-muted">
+                    <br>
+                    上传时间：{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                    <br>
+                    大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
+                    <br>
+                    格式：{{ file.file_format.upper() }}
+                </small>
+            </div>
+            <div class="file-actions">
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此图片吗？');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-list">
+        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无待添加水印的图片</p>
+    </div>
+    {% endif %}
+
+    <!-- 水印添加表单 -->
+    <div id="watermarkForm" class="watermark-form" style="display: none;">
+        <h3 class="section-title">
+            <i class="glyphicon glyphicon-pencil"></i> 添加水印
+        </h3>
+        <form method="POST" action="{{ url_for('image_add_watermark') }}" style="max-width: 500px; margin: 0 auto;">
+            {{ form.hidden_tag() }}
+            <input type="hidden" id="selectedFileIds" name="selected_file_ids" value="">
+            <div class="form-group">
+                {{ form.watermark(class="form-control text-center", placeholder="请输入要嵌入的水印内容") }}
+            </div>
+            <div class="form-group text-center">
+                {{ form.submit(class="btn btn-primary") }}
+                <button type="button" class="btn btn-default" onclick="hideWatermarkForm()">取消</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- 显示已添加水印的文件列表 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-ok-circle"></i> 已添加水印的图片</h3>
+    {% if files and files|selectattr('has_watermark')|list|length > 0 %}
+    <div class="file-list">
+        {% for file in files %}
+        {% if file.has_watermark %}
+        <div class="file-item">
+            <div class="file-info">
+                <i class="glyphicon glyphicon-picture"></i>
+                <span>{{ file.filename }}</span>
+                <small class="text-muted">处理时间：{{ file.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                {% if file.processing_status == 'failed' %}
+                <span class="label label-danger">处理失败</span>
+                {% if file.error_message %}
+                <small class="text-danger">{{ file.error_message }}</small>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="file-actions">
+                {% if file.processing_status == 'completed' %}
+                <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-success">
+                    <i class="glyphicon glyphicon-download-alt"></i> 下载
+                </a>
+                {% endif %}
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此图片吗？');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-list">
+        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已添加水印的图片</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{super()}}
+<script>
+    var selectedFiles = [];
+    
+    // 页面加载时检查URL参数
+    window.onload = function() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var selectedParam = urlParams.get('selected');
+        if (selectedParam) {
+            var fileIds = selectedParam.split(',');
+            fileIds.forEach(function(id) {
+                var checkbox = document.querySelector('input[value="' + id + '"]');
+                if (checkbox) {
+                    checkbox.checked = true;
+                    selectedFiles.push(id);
+                }
+            });
+            updateSelectedCount();
+            showSelectedFilesInfo();
+        }
+    };
+
+    // 全选功能
+    function toggleSelectAll() {
+        var selectAll = document.getElementById('selectAll');
+        var checkboxes = document.querySelectorAll('.file-checkbox');
+        
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+        
+        updateSelectedCount();
+    }
+
+    // 更新选中数量
+    function updateSelectedCount() {
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        var allCheckboxes = document.querySelectorAll('.file-checkbox');
+        var count = checkboxes.length;
+        var totalCount = allCheckboxes.length;
+        var selectedCount = document.getElementById('selectedCount');
+        var addWatermarkBtn = document.getElementById('addWatermarkBtn');
+        var selectAll = document.getElementById('selectAll');
+        
+        // 更新选中数量显示
+        selectedCount.textContent = '已选择 ' + count + ' 个文件';
+        
+        // 更新全选框状态
+        if (count === 0) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        } else if (count === totalCount) {
+            selectAll.checked = true;
+            selectAll.indeterminate = false;
+        } else {
+            selectAll.checked = false;
+            selectAll.indeterminate = true;
+        }
+        
+        // 更新按钮状态
+        addWatermarkBtn.disabled = count === 0;
+        
+        // 更新选中文件列表
+        selectedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
+        
+        if (count > 0) {
+            showSelectedFilesInfo();
+        } else {
+            hideSelectedFilesInfo();
+        }
+    }
+
+    // 显示选中文件信息
+    function showSelectedFilesInfo() {
+        var infoDiv = document.getElementById('selectedFilesInfo');
+        var listDiv = document.getElementById('selectedFilesList');
+        
+        listDiv.innerHTML = '';
+        selectedFiles.forEach(function(fileId) {
+            var fileItem = document.querySelector('[data-file-id="' + fileId + '"]');
+            if (fileItem) {
+                var filename = fileItem.querySelector('span').textContent;
+                listDiv.innerHTML += '<div><i class="glyphicon glyphicon-picture"></i> ' + filename + '</div>';
+            }
+        });
+        
+        infoDiv.style.display = 'block';
+    }
+
+    // 隐藏选中文件信息
+    function hideSelectedFilesInfo() {
+        document.getElementById('selectedFilesInfo').style.display = 'none';
+    }
+
+    // 清除选择
+    function clearSelection() {
+        var checkboxes = document.querySelectorAll('.file-checkbox');
+        var selectAll = document.getElementById('selectAll');
+        
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = false;
+        });
+        
+        // 重置全选框状态
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+        
+        selectedFiles = [];
+        updateSelectedCount();
+        hideSelectedFilesInfo();
+    }
+
+    // 为选中文件添加水印
+    function addWatermarkToSelected() {
+        if (selectedFiles.length === 0) {
+            alert('请先选择要添加水印的文件');
+            return;
+        }
+        
+        document.getElementById('selectedFileIds').value = selectedFiles.join(',');
+        document.getElementById('watermarkForm').style.display = 'block';
+        
+        // 滚动到表单
+        document.getElementById('watermarkForm').scrollIntoView({ behavior: 'smooth' });
+        
+        // 聚焦到水印输入框
+        setTimeout(function() {
+            var watermarkInput = document.querySelector('#watermarkForm input[name="watermark"]');
+            if (watermarkInput) {
+                watermarkInput.focus();
+            }
+        }, 500);
+    }
+
+    // 隐藏水印表单
+    function hideWatermarkForm() {
+        document.getElementById('watermarkForm').style.display = 'none';
+        // 清空表单内容
+        var watermarkInput = document.querySelector('#watermarkForm input[name="watermark"]');
+        if (watermarkInput) {
+            watermarkInput.value = '';
+        }
+    }
+
+    // 添加键盘快捷键支持
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+A 全选
+        if (e.ctrlKey && e.key === 'a') {
+            e.preventDefault();
+            var selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                selectAll.checked = !selectAll.checked;
+                toggleSelectAll();
+            }
+        }
+        
+        // ESC 隐藏水印表单
+        if (e.key === 'Escape') {
+            var watermarkForm = document.getElementById('watermarkForm');
+            if (watermarkForm && watermarkForm.style.display !== 'none') {
+                hideWatermarkForm();
+            }
+        }
+    });
+
+    // 删除选中文件
+    function deleteSelectedFiles() {
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        if (checkboxes.length === 0) return;
+        
+        if (!confirm('确定要删除选中的 ' + checkboxes.length + ' 个文件吗？此操作不可撤销！')) return;
+        
+        // 禁用删除按钮，防止重复点击
+        var deleteBtn = document.getElementById('deleteSelectedBtn');
+        var originalText = deleteBtn.innerHTML;
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<i class="glyphicon glyphicon-refresh"></i> 删除中...';
+        
+        var promises = Array.from(checkboxes).map(function(checkbox) {
+            return fetch('{{ url_for("delete_file", file_id=0) }}'.replace('/0', '/' + checkbox.value), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                }
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('删除失败: ' + response.statusText);
+                }
+                return response;
+            });
+        });
+        
+        Promise.all(promises)
+            .then(function() {
+                // 删除成功，刷新页面
+                window.location.reload();
+            })
+            .catch(function(error) {
+                // 删除失败，恢复按钮状态并显示错误
+                console.error('删除文件时出错:', error);
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = originalText;
+                alert('删除文件时出现错误: ' + error.message);
+            });
+    }
+</script>
+{% endblock %}
+
+
+

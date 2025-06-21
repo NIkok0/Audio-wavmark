@@ -1,13 +1,23 @@
 FFMPEG_BIN = "ffmpeg.exe"
 
-import subprocess as sp#调用外部程序
+import subprocess as sp
 import numpy
 import watermark.utils.robust as robust
 import os
 import json
+import cv2
+import numpy as np
+from PIL import Image
+from flask import current_app
 
-#embed_dir
-embed_dir=os.path.join(os.getcwd(),'embed_file')
+def bin_value(value, bitsize):
+    """将整数转化为固定长度的二进制字符串"""
+    binval = bin(value)[2:]
+    if len(binval) > bitsize:
+        print("Too Large!")
+    while len(binval) < bitsize:
+        binval = "0" + binval
+    return binval
 
 def get_video_info(video_path):
     """获取视频信息，包括分辨率"""
@@ -36,199 +46,90 @@ def get_video_info(video_path):
         # 返回默认分辨率
         return 1920, 1080, 'yuv420p'
 
-def embed(input_video, watermark_string):
+def embed(input_file, watermark, algorithm):
+    """视频水印嵌入 - 负责算法调用和文件保存"""
+    
+    # 直接生成函数名
+    function_name = f"embed_{algorithm.lower()}"
+    
+    try:
+        # 获取当前模块中的函数
+        embed_function = globals().get(function_name)
+        if embed_function is None:
+            raise ValueError(f"视频水印算法 {algorithm} 的实现函数 {function_name} 不存在")
+        
+        # 调用算法，获取处理后的视频对象
+        processed_video = embed_function(input_file, watermark)
+        
+        # 文件保存逻辑
+        original_name = os.path.basename(input_file)
+        name_without_ext = os.path.splitext(original_name)[0]
+        filename = f"{name_without_ext}_embed.mp4"
+        
+        # 从app.config获取保存路径
+        embed_dir = current_app.config['MEDIA_FOLDERS']['video']['embed']
+        full_path = os.path.join(embed_dir, filename)
+        
+        # 保存文件 - 在这种情况下，processed_video已经是保存好的文件路径
+        # 因为视频处理过程中需要直接写入文件
+        if os.path.exists(processed_video) and processed_video != full_path:
+            os.rename(processed_video, full_path)
+        
+        return full_path  # 返回完整路径
+        
+    except Exception as e:
+        print(f"视频水印算法 {algorithm} 失败: {str(e)}")
+        raise
+
+def extract(input_file, algorithm):
+    """视频水印提取 - 支持多种算法（基于配置）"""
+    # 直接生成函数名
+    function_name = f"extract_{algorithm.lower()}"
+    
+    try:
+        # 获取当前模块中的函数
+        extract_function = globals().get(function_name)
+        if extract_function is None:
+            raise ValueError(f"视频水印算法 {algorithm} 的提取函数 {function_name} 不存在")
+        
+        return extract_function(input_file)
+        
+    except Exception as e:
+        print(f"视频水印提取算法 {algorithm} 失败: {str(e)}")
+        raise
+
+def embed_dct(input_file, watermark):
     print("video_watermark_embed!")
-    
-    # 确保embed_dir目录存在
-    if not os.path.exists(embed_dir):
-        os.makedirs(embed_dir)
-    
-    # 正确处理文件名，使用os.path代替手动分割
-    input_basename = os.path.basename(input_video)
-    output_filename = f"{input_basename}_embed.mp4"  # 改用更通用的mp4格式
-    output_path = os.path.join(embed_dir, output_filename)
-    
-    print(f"输入视频: {input_video}")
-    print(f"输出路径: {output_path}")
-
-    # 检查输入文件是否存在且可读
-    if not os.path.exists(input_video):
-        print(f"错误: 输入视频文件不存在: {input_video}")
-        return None
-        
-    # 获取视频分辨率和像素格式
-    try:
-        width, height, pix_fmt = get_video_info(input_video)
-        print(f"视频分辨率: {width}x{height}, 像素格式: {pix_fmt}")
-    except Exception as e:
-        print(f"读取视频信息失败，使用默认参数: {str(e)}")
-        width, height, pix_fmt = 1920, 1080, 'yuv420p'
-
-    # 计算每帧大小
-    frame_size = width * height * 3  # 假设3通道YUV
-    
-    # 使用两阶段处理 - 直接用ffmpeg生成中间可处理格式
-    temp_yuv_file = os.path.join(embed_dir, f"temp_{os.path.splitext(input_basename)[0]}.yuv")
-    
-    # 1. 转换为原始YUV格式，便于处理
-    try:
-        convert_cmd = [
-            FFMPEG_BIN,
-            '-y',
-            '-i', input_video,
-            '-f', 'rawvideo',
-            '-pix_fmt', 'yuv420p',
-            '-s', f'{width}x{height}',
-            temp_yuv_file
-        ]
-        
-        print("执行视频转换命令...")
-        convert_process = sp.run(convert_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        
-        if convert_process.returncode != 0:
-            print(f"视频转换失败，错误信息: {convert_process.stderr.decode('utf-8', errors='ignore')}")
-            return None
-            
-        if not os.path.exists(temp_yuv_file) or os.path.getsize(temp_yuv_file) == 0:
-            print(f"临时YUV文件创建失败: {temp_yuv_file}")
-            return None
-            
-        print(f"视频转换成功，临时文件: {temp_yuv_file}")
-    except Exception as e:
-        print(f"视频转换过程出错: {str(e)}")
-        return None
-    
-    # 2. 读取YUV文件并处理
-    try:
-        with open(temp_yuv_file, 'rb') as f:
-            raw_data = f.read(frame_size)
-            if not raw_data or len(raw_data) < frame_size:
-                print(f"YUV文件读取失败，期望大小: {frame_size}，实际读取: {len(raw_data) if raw_data else 0}")
-                return None
-                
-            # 处理第一帧
-            image = numpy.frombuffer(raw_data, dtype='uint8')
-            image = image.reshape((height, width, 3))
-            
-            # 获取Y通道
-            img_tmp = image[:height, :width, 0].copy()  # 确保是副本
-            
-            # 嵌入水印
-            print(f"开始嵌入水印: '{watermark_string}'")
-            success = robust.embed_watermark(img_tmp, watermark_string)
-            if not success:
-                print("水印嵌入失败")
-                return None
-                
-            # 更新Y通道
-            image[:height, :width, 0] = img_tmp
-            
-            # 保存处理后的YUV
-            processed_yuv = os.path.join(embed_dir, f"processed_{os.path.splitext(input_basename)[0]}.yuv")
-            with open(processed_yuv, 'wb') as out_f:
-                out_f.write(image.tobytes())
-                # 写入剩余帧（不做处理）
-                remaining_data = f.read()
-                if remaining_data:
-                    out_f.write(remaining_data)
-    except Exception as e:
-        print(f"处理YUV数据时出错: {str(e)}")
-        if os.path.exists(temp_yuv_file):
-            try:
-                os.remove(temp_yuv_file)
-            except:
-                pass
-        return None
-    
-    # 3. 转换回视频格式
-    try:
-        encode_cmd = [
-            FFMPEG_BIN,
-            '-y',
-            '-f', 'rawvideo',
-            '-vcodec', 'rawvideo',
-            '-s', f'{width}x{height}',
-            '-pix_fmt', 'yuv420p',
-            '-i', processed_yuv,
-            '-c:v', 'libx264',  # 使用H.264编码，兼容性更好
-            '-preset', 'medium',
-            '-crf', '23',
-            output_path
-        ]
-        
-        print("执行视频编码命令...")
-        encode_process = sp.run(encode_cmd, stdout=sp.PIPE, stderr=sp.PIPE)
-        
-        if encode_process.returncode != 0:
-            print(f"视频编码失败，错误信息: {encode_process.stderr.decode('utf-8', errors='ignore')}")
-            return None
-    except Exception as e:
-        print(f"视频编码过程出错: {str(e)}")
-        return None
-    finally:
-        # 清理临时文件
-        for temp_file in [temp_yuv_file, processed_yuv]:
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-    
-    # 验证文件是否成功生成
-    if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:  # 确保文件大小合理
-        print(f"视频水印添加成功: {output_path}, 大小: {os.path.getsize(output_path)} 字节")
-        return output_path
-    else:
-        print(f"视频水印添加失败: {output_path}, {'文件不存在' if not os.path.exists(output_path) else f'文件大小异常: {os.path.getsize(output_path)} 字节'}")
-        return None
+    return input_file
 
 
-def extract(input_video):
+def extract_dct(input_file):
     print("video_watermark_extract!")
-    
-    # 获取视频分辨率和像素格式
-    try:
-        width, height, pix_fmt = get_video_info(input_video)
-        print(f"提取水印 - 视频分辨率: {width}x{height}, 像素格式: {pix_fmt}")
-    except Exception as e:
-        print(f"读取视频信息失败，使用默认参数: {str(e)}")
-        width, height, pix_fmt = 1920, 1080, 'yuv420p'
+    return "test"
 
-    # 计算每帧大小
-    frame_size = width * height * 3  # 假设3通道YUV
-    
-    command_read = [FFMPEG_BIN,
-                    '-i', input_video,
-                    '-f', 'image2pipe',
-                    '-pix_fmt', pix_fmt,
-                    '-vcodec', 'rawvideo', '-']
-    pipe_read = sp.Popen(command_read, stdout=sp.PIPE, bufsize=10 ** 8)
+def embed_cox(input_file, watermark):
+    """Cox算法实现 - 后期实现"""
+    raise NotImplementedError("视频Cox算法尚未实现")
 
-    raw_image = pipe_read.stdout.read(frame_size)
-    result = []
-    
-    try:
-        while raw_image != None and len(raw_image) != 0:
-            # transform the byte read into a numpy array
-            image = numpy.frombuffer(raw_image, dtype='uint8')
-            image = image.reshape((height, width, 3))
-            # throw away the data in the pipe's buffer.
-            pipe_read.stdout.flush()
+def embed_lsb(input_file, watermark):
+    """LSB算法实现 - 后期实现"""
+    raise NotImplementedError("视频LSB算法尚未实现")
 
-            img_tmp = image[:height, :width, 0]
-            result.append(robust.extract_watermark(img_tmp))
-            raw_image = pipe_read.stdout.read(frame_size)
-            break  # 只提取第一帧的水印
-    except Exception as e:
-        print(f"提取视频水印时出错: {str(e)}")
-        if pipe_read and pipe_read.stdout:
-            pipe_read.stdout.close()
-        return f"提取水印失败: {str(e)}"
-        
-    if result and len(result) > 0:
-        return result[0]
-    else:
-        return "未能提取水印"
+def embed_dwt(input_file, watermark):
+    """DWT算法实现 - 后期实现"""
+    raise NotImplementedError("视频DWT算法尚未实现")
+
+def extract_cox(input_file):
+    """Cox算法提取 - 后期实现"""
+    raise NotImplementedError("视频Cox算法尚未实现")
+
+def extract_lsb(input_file):
+    """LSB算法提取 - 后期实现"""
+    raise NotImplementedError("视频LSB算法尚未实现")
+
+def extract_dwt(input_file):
+    """DWT算法提取 - 后期实现"""
+    raise NotImplementedError("视频DWT算法尚未实现")
 
 
 

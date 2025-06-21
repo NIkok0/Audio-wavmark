@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+
+{% block title %}上传音频 - 数字水印系统{% endblock %}
+
+{% block styles %}
+{{super()}}
+<style>
+    .watermark-container {
+        max-width: 1000px;
+        margin: 30px auto;
+        padding: 30px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .watermark-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .watermark-header h1 {
+        font-size: 24px;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    .upload-section {
+        text-align: center;
+        padding: 30px;
+        border: 2px dashed #ddd;
+        border-radius: 5px;
+        margin-bottom: 30px;
+    }
+    .upload-section:hover {
+        border-color: #3498db;
+    }
+    .file-list {
+        margin-top: 30px;
+    }
+    .file-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .file-item:hover {
+        background-color: #f9f9f9;
+    }
+    .file-info {
+        flex-grow: 1;
+    }
+    .file-actions {
+        margin-left: 15px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transform: translateX(-15px);
+        padding: 8px 0;
+    }
+    .file-actions .btn {
+        height: 32px;
+        line-height: 1.4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .button-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin: 15px auto 0;
+    }
+    .button-container .btn {
+        min-width: 120px;
+        margin: 0;
+    }
+    .progress {
+        margin-top: 10px;
+        display: none;
+    }
+    #dropZone {
+        min-height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+    .upload-icon {
+        font-size: 48px;
+        color: #95a5a6;
+        margin-bottom: 10px;
+    }
+    .section-title {
+        margin: 30px 0 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        font-size: 18px;
+    }
+    .empty-list {
+        text-align: center;
+        padding: 20px;
+        color: #95a5a6;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+    }
+    .batch-actions {
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+    }
+    .file-checkbox {
+        margin-right: 10px;
+    }
+    .upload-queue {
+        margin-top: 20px;
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        display: none;
+    }
+    .queue-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        margin-bottom: 5px;
+        background-color: white;
+        border-radius: 3px;
+        border: 1px solid #eee;
+    }
+    .queue-item.success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+    }
+    .queue-item.error {
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+    }
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn:disabled:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none;
+    }
+    .btn[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn.btn-primary[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+    }
+    .btn.btn-primary[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    /* 为超链接按钮添加禁用状态样式 */
+    a.btn.disabled,
+    a.btn[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+        text-decoration: none !important;
+    }
+    a.btn.disabled:hover,
+    a.btn[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+    a.btn.btn-primary.disabled,
+    a.btn.btn-primary[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+        text-decoration: none !important;
+    }
+    a.btn.btn-primary.disabled:hover,
+    a.btn.btn-primary[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="watermark-container">
+    <div style="margin-bottom: 20px; padding: 0 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="{{ url_for('audio_add_watermark') }}" class="btn btn-primary" style="margin-left: -15px;">
+                <i class="glyphicon glyphicon-tint"></i> 去添加水印
+            </a>
+            <a href="{{ url_for('audio_process') }}" class="btn btn-default" style="margin-right: -15px;">
+                <i class="glyphicon glyphicon-arrow-left"></i> 返回
+            </a>
+        </div>
+    </div>
+
+    <div class="watermark-header">
+        <h1>上传音频</h1>
+        <p class="text-muted">支持拖拽或点击上传音频文件（支持批量上传）</p>
+        <div class="alert alert-info">
+            <strong>注意</strong>
+            <ul style="margin: 10px 0 0 0; text-align: left;">
+                <li>支持的音频格式：MP3, WAV, FLAC, AAC</li>
+                <li>最大文件大小：{{ get_max_size_formatted('audio') if get_max_size_formatted is defined else '50MB' }}</li>
+                <li>支持批量上传多个音频文件</li>
+                <li>建议使用无损格式（WAV、FLAC）以获得更好的水印效果</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="upload-section">
+        <div id="dropZone">
+            <i class="glyphicon glyphicon-music upload-icon"></i>
+            <p class="lead">拖拽音频到这里或点击选择音频</p>
+            <p class="text-muted">支持的格式：MP3, WAV, FLAC, AAC（支持多选）</p>
+            <form id="uploadForm" action="{{ url_for('audio_upload') }}" method="post" enctype="multipart/form-data">
+                <input type="file" id="fileInput" name="file" style="display: none;" accept=".mp3,.wav,.flac,.aac" multiple>
+                <div class="button-container">
+                    <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
+                        选择音频
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="uploadSelectedFiles()" id="uploadBtn" style="display: none;">
+                        开始上传
+                    </button>
+                </div>
+            </form>
+        </div>
+        <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+        </div>
+        
+        <!-- 上传队列 -->
+        <div id="uploadQueue" class="upload-queue">
+            <h4><i class="glyphicon glyphicon-list"></i> 上传队列</h4>
+            <div id="queueItems"></div>
+        </div>
+    </div>
+
+    <!-- 批量操作 -->
+    {% if files %}
+    <div class="batch-actions">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <label>
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选
+                </label>
+                <span id="selectedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedFiles()" id="deleteSelectedBtn" disabled>
+                    <i class="glyphicon glyphicon-trash"></i> 删除选中
+                </button>
+                <a href="{{ url_for('audio_add_watermark') }}" class="btn btn-primary btn-sm" id="addWatermarkBtn" style="display: none;" onclick="return !this.classList.contains('disabled');">
+                    <i class="glyphicon glyphicon-tint"></i> 为选中文件添加水印
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 显示已上传的文件列表 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-music"></i> 已上传的音频</h3>
+    {% if files %}
+    <div class="file-list">
+        {% for file in files %}
+        <div class="file-item">
+            <div class="file-info">
+                <label style="margin: 0; cursor: pointer;">
+                    <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateSelectedCount()">
+                    <i class="glyphicon glyphicon-music"></i>
+                    <span>{{ file.filename }}</span>
+                </label>
+                <small class="text-muted">
+                    <br>
+                    上传时间：{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                    <br>
+                    大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
+                    <br>
+                    格式：{{ file.file_format.upper() }}
+                    {% if file.has_watermark %}
+                    <br>
+                    <span class="label label-success">已添加水印</span>
+                    {% endif %}
+                </small>
+            </div>
+            <div class="file-actions">
+                {% if file.has_watermark %}
+                <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-primary">
+                    <i class="glyphicon glyphicon-download"></i> 下载
+                </a>
+                {% endif %}
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此音频吗？');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-list">
+        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已上传的音频</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{super()}}
+<script>
+    var selectedFiles = [];
+    var uploadQueue = [];
+
+    // 文件拖拽上传
+    var dropZone = document.getElementById('dropZone');
+    var fileInput = document.getElementById('fileInput');
+    var uploadForm = document.getElementById('uploadForm');
+    var progressBar = document.querySelector('.progress');
+    var progressBarInner = document.querySelector('.progress-bar');
+
+    // 处理拖拽事件
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.style.borderColor = '#3498db';
+    });
+
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.style.borderColor = '#ddd';
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.style.borderColor = '#ddd';
+        
+        var files = e.dataTransfer.files;
+        handleFiles(files);
+    });
+
+    // 处理文件选择
+    fileInput.addEventListener('change', function(e) {
+        handleFiles(this.files);
+    });
+
+    function handleFiles(files) {
+        if (files.length === 0) return;
+        
+        // 清空上传队列
+        uploadQueue = [];
+        document.getElementById('queueItems').innerHTML = '';
+        document.getElementById('uploadQueue').style.display = 'block';
+        
+        // 添加文件到队列
+        for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+            uploadQueue.push({
+                file: file,
+                status: 'pending',
+                progress: 0
+            });
+            
+            // 添加到队列显示
+            addToQueue(file.name, 'pending');
+        }
+        
+        // 显示上传按钮
+        document.getElementById('uploadBtn').style.display = 'inline-block';
+    }
+
+    function addToQueue(filename, status) {
+        var queueItems = document.getElementById('queueItems');
+        var item = document.createElement('div');
+        item.className = 'queue-item ' + status;
+        item.innerHTML = `
+            <span>${filename}</span>
+            <span class="status">${status === 'pending' ? '等待上传' : status === 'uploading' ? '上传中...' : status === 'success' ? '上传成功' : '上传失败'}</span>
+        `;
+        queueItems.appendChild(item);
+    }
+
+    function uploadSelectedFiles() {
+        if (uploadQueue.length === 0) return;
+        
+        var uploadBtn = document.getElementById('uploadBtn');
+        uploadBtn.disabled = true;
+        uploadBtn.innerHTML = '<i class="glyphicon glyphicon-refresh"></i> 上传中...';
+        
+        uploadQueue.forEach(function(item, index) {
+            uploadFile(item.file, index);
+        });
+    }
+
+    function uploadFile(file, index) {
+        var formData = new FormData();
+        formData.append('file', file);
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '{{ url_for("audio_upload") }}', true);
+        
+        // 更新队列状态
+        uploadQueue[index].status = 'uploading';
+        updateQueueItem(index, 'uploading');
+        
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var percentComplete = (e.loaded / e.total) * 100;
+                uploadQueue[index].progress = percentComplete;
+            }
+        };
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                uploadQueue[index].status = 'success';
+                updateQueueItem(index, 'success');
+            } else {
+                uploadQueue[index].status = 'error';
+                updateQueueItem(index, 'error');
+            }
+            
+            // 检查是否所有文件都上传完成
+            var allCompleted = uploadQueue.every(function(item) {
+                return item.status === 'success' || item.status === 'error';
+            });
+            
+            if (allCompleted) {
+                setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
+            }
+        };
+        
+        xhr.send(formData);
+    }
+
+    function updateQueueItem(index, status) {
+        var queueItems = document.getElementById('queueItems');
+        var items = queueItems.children;
+        if (items[index]) {
+            items[index].className = 'queue-item ' + status;
+            var statusSpan = items[index].querySelector('.status');
+            if (statusSpan) {
+                statusSpan.textContent = status === 'pending' ? '等待上传' : 
+                                       status === 'uploading' ? '上传中...' : 
+                                       status === 'success' ? '上传成功' : '上传失败';
+            }
+        }
+    }
+
+    // 全选功能
+    function toggleSelectAll() {
+        var selectAll = document.getElementById('selectAll');
+        var checkboxes = document.querySelectorAll('.file-checkbox');
+        
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+        
+        updateSelectedCount();
+    }
+
+    // 更新选中数量
+    function updateSelectedCount() {
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        var count = checkboxes.length;
+        var selectedCount = document.getElementById('selectedCount');
+        var deleteBtn = document.getElementById('deleteSelectedBtn');
+        var addWatermarkBtn = document.getElementById('addWatermarkBtn');
+        
+        selectedCount.textContent = '已选择 ' + count + ' 个文件';
+        deleteBtn.disabled = count === 0;
+        
+        if (count > 0) {
+            // 检查选中的文件中是否有已添加水印的文件
+            var hasWatermarkedFiles = false;
+            checkboxes.forEach(function(checkbox) {
+                var fileItem = checkbox.closest('.file-item');
+                if (fileItem) {
+                    var watermarkLabel = fileItem.querySelector('.label-success');
+                    if (watermarkLabel && watermarkLabel.textContent.includes('已添加水印')) {
+                        hasWatermarkedFiles = true;
+                    }
+                }
+            });
+            
+            if (hasWatermarkedFiles) {
+                // 如果有已添加水印的文件，禁用添加水印按钮
+                addWatermarkBtn.style.display = 'inline-block';
+                addWatermarkBtn.classList.add('disabled');
+                addWatermarkBtn.title = '无法再为已添加水印的文件添加水印';
+                addWatermarkBtn.removeAttribute('href'); // 移除链接，防止跳转
+                
+                // 显示警告信息
+                var warningDiv = document.getElementById('watermarkWarning');
+                if (!warningDiv) {
+                    warningDiv = document.createElement('div');
+                    warningDiv.id = 'watermarkWarning';
+                    warningDiv.className = 'alert alert-warning';
+                    warningDiv.style.marginTop = '10px';
+                    warningDiv.innerHTML = '<i class="glyphicon glyphicon-exclamation-sign"></i> 选中的文件中包含已添加水印的文件，无法再次添加水印';
+                    
+                    var batchActions = document.querySelector('.batch-actions');
+                    if (batchActions) {
+                        batchActions.appendChild(warningDiv);
+                    }
+                }
+            } else {
+                // 如果没有已添加水印的文件，正常显示添加水印按钮
+                addWatermarkBtn.style.display = 'inline-block';
+                addWatermarkBtn.classList.remove('disabled');
+                addWatermarkBtn.title = '为选中的文件添加水印';
+                
+                // 移除警告信息
+                var warningDiv = document.getElementById('watermarkWarning');
+                if (warningDiv) {
+                    warningDiv.remove();
+                }
+                
+                // 更新链接，添加选中的文件ID
+                var selectedIds = Array.from(checkboxes).map(function(cb) { return cb.value; }).join(',');
+                addWatermarkBtn.href = '{{ url_for("audio_add_watermark") }}?selected=' + selectedIds;
+            }
+        } else {
+            addWatermarkBtn.style.display = 'none';
+            
+            // 移除警告信息
+            var warningDiv = document.getElementById('watermarkWarning');
+            if (warningDiv) {
+                warningDiv.remove();
+            }
+        }
+    }
+
+    // 删除选中文件
+    function deleteSelectedFiles() {
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        if (checkboxes.length === 0) return;
+        
+        if (!confirm('确定要删除选中的 ' + checkboxes.length + ' 个文件吗？')) return;
+        
+        var promises = Array.from(checkboxes).map(function(checkbox) {
+            return fetch('{{ url_for("delete_file", file_id=0) }}'.replace('/0', '/' + checkbox.value), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                }
+            });
+        });
+        
+        Promise.all(promises).then(function() {
+            window.location.reload();
+        });
+    }
+</script>
+{% endblock %} 

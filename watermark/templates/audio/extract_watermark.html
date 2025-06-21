@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}提取音频水印 - 数字水印系统{% endblock %}
+
+{% block styles %}
+{{super()}}
+<style>
+    .watermark-container {
+        max-width: 1000px;
+        margin: 30px auto;
+        padding: 30px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .extract-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .extract-header h1 {
+        font-size: 24px;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    .result-list {
+        margin-top: 30px;
+    }
+    .result-item {
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+        transition: opacity 0.3s ease;
+    }
+    .result-item:hover {
+        background-color: #f5f5f5;
+    }
+    .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .result-filename {
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    .result-time {
+        color: #7f8c8d;
+        font-size: 0.9em;
+    }
+    .result-content {
+        padding: 10px;
+        background-color: #fff;
+        border-radius: 3px;
+        border-left: 4px solid #3498db;
+    }
+    .section-title {
+        margin: 30px 0 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        font-size: 18px;
+    }
+    .empty-list {
+        text-align: center;
+        padding: 20px;
+        color: #95a5a6;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+    }
+    .file-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .file-item:hover {
+        background-color: #f9f9f9;
+    }
+    .file-item.selected {
+        background-color: #e3f2fd;
+        border-color: #2196f3;
+    }
+    .file-info {
+        flex-grow: 1;
+    }
+    .file-actions {
+        margin-left: 15px;
+    }
+    .main-section {
+        border-top: 1px solid #eee;
+        padding-top: 20px;
+        margin-top: 20px;
+    }
+    .extract-button {
+        margin-left: 5px;
+    }
+    .file-path {
+        font-size: 0.8em;
+        color: #999;
+        word-break: break-all;
+        margin-top: 5px;
+    }
+    .result-clear {
+        margin-top: 10px;
+    }
+    .batch-actions {
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+    }
+    .file-checkbox {
+        margin-right: 10px;
+    }
+    .selected-files-info {
+        background-color: #e8f5e8;
+        border: 1px solid #4caf50;
+        border-radius: 4px;
+        padding: 10px;
+        margin: 15px 0;
+        display: none;
+    }
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn:disabled:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none;
+    }
+    .btn[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    .btn.btn-primary[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+    }
+    .btn.btn-primary[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+    }
+    a.btn.disabled,
+    a.btn[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+        text-decoration: none !important;
+    }
+    a.btn.disabled:hover,
+    a.btn[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+    a.btn.btn-primary.disabled,
+    a.btn.btn-primary[disabled] {
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        pointer-events: none !important;
+        text-decoration: none !important;
+    }
+    a.btn.btn-primary.disabled:hover,
+    a.btn.btn-primary[disabled]:hover {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+        color: #fff !important;
+        text-decoration: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="watermark-container">
+    <div style="margin-bottom: 20px; padding: 0 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <a href="{{ url_for('audio_add_watermark') }}" class="btn btn-primary" style="margin-right: 10px; margin-left: -15px;">
+                <i class="glyphicon glyphicon-tint"></i> 去添加水印
+            </a>
+            <a href="{{ url_for('audio_upload') }}" class="btn btn-success" style="margin-right: 10px;">
+                <i class="glyphicon glyphicon-cloud-upload"></i> 去上传文件
+            </a>
+            <a href="{{ url_for('audio_process') }}" class="btn btn-default" style="margin-left: auto;">
+                <i class="glyphicon glyphicon-arrow-left"></i> 返回
+            </a>
+        </div>
+    </div>
+    <div class="extract-header">
+        <h1>提取音频水印</h1>
+        <p class="text-muted">从您的音频文件中提取水印信息</p>
+    </div>
+
+    <!-- 批量操作 -->
+    {% if files %}
+    <div class="batch-actions">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <label>
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选
+                </label>
+                <span id="selectedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
+                <button type="button" class="btn btn-primary btn-sm" onclick="extractWatermarkFromSelected()" id="extractWatermarkBtn" disabled>
+                    <i class="glyphicon glyphicon-search"></i> 提取水印！
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- 显示用户的已添加水印的文件列表 -->
+    <div class="main-section">
+        <h3 class="section-title"><i class="glyphicon glyphicon-ok-circle"></i> 您的已添加水印的文件</h3>
+        {% if files %}
+        <div class="file-list">
+            {% for file in files %}
+            <div class="file-item" data-file-id="{{ file.id }}">
+                <div class="file-info">
+                    <label style="margin: 0; cursor: pointer;">
+                        <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateSelectedCount()">
+                        <i class="glyphicon glyphicon-music"></i>
+                        <span>{{ file.filename }}</span>
+                    </label>
+                    <small class="text-muted">
+                        <br>
+                        处理时间：{{ file.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        <br>
+                        大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
+                        <br>
+                        格式：{{ file.file_format.upper() }}
+                    </small>
+                    <div class="file-path">
+                        <strong>文件路径:</strong> {{ file.watermarked_path }}
+                        <strong>状态:</strong> {% if file.watermarked_path and file.watermarked_path|path_exists %}存在{% else %}不存在{% endif %}
+                    </div>
+                </div>
+                <div class="file-actions">
+                    <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-success">
+                        <i class="glyphicon glyphicon-download-alt"></i> 下载
+                    </a>
+                    <a href="{{ url_for('audio_extract_from_file', file_id=file.id) }}" class="btn btn-sm btn-info extract-button">
+                        <i class="glyphicon glyphicon-search"></i> 提取水印
+                    </a>
+                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此文件吗？');">
+                        <button type="submit" class="btn btn-sm btn-danger">
+                            <i class="glyphicon glyphicon-trash"></i> 删除
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-list">
+            <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已添加水印的文件</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 显示提取结果 -->
+    {% if extracted_files %}
+    <div class="main-section">
+        <div class="result-list">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="section-title"><i class="glyphicon glyphicon-list-alt"></i> 水印提取结果</h3>
+                <form method="POST" action="{{ url_for('clear_all_extract_results') }}" style="display:inline;">
+                    <input type="hidden" name="file_type" value="audio">
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="glyphicon glyphicon-trash"></i> 清除所有结果
+                    </button>
+                </form>
+            </div>
+            {% for filename, result in extracted_files.items() %}
+            <div class="result-item">
+                <div class="result-header">
+                    <span class="result-filename">{{ filename }}</span>
+                    <form method="POST" action="{{ url_for('clear_extract_result') }}" style="display:inline;">
+                        <input type="hidden" name="filename" value="{{ filename }}">
+                        <input type="hidden" name="file_type" value="audio">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="glyphicon glyphicon-remove"></i> 清除
+                        </button>
+                    </form>
+                </div>
+                <div class="result-content">
+                    <strong>提取的水印：</strong>{{ result }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="main-section">
+        <h3 class="section-title"><i class="glyphicon glyphicon-list-alt"></i> 水印提取结果</h3>
+        <div class="empty-list">
+            <p><i class="glyphicon glyphicon-info-sign"></i> 暂无水印提取结果</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% block scripts %}
+{{super()}}
+<script>
+    var selectedFiles = [];
+    
+    // 页面加载时检查URL参数
+    window.onload = function() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var selectedParam = urlParams.get('selected');
+        if (selectedParam) {
+            var fileIds = selectedParam.split(',');
+            fileIds.forEach(function(id) {
+                var checkbox = document.querySelector('input[value="' + id + '"]');
+                if (checkbox) {
+                    checkbox.checked = true;
+                    selectedFiles.push(id);
+                }
+            });
+            updateSelectedCount();
+            showSelectedFilesInfo();
+        }
+    };
+
+    // 全选功能
+    function toggleSelectAll() {
+        var selectAll = document.getElementById('selectAll');
+        var checkboxes = document.querySelectorAll('.file-checkbox');
+        
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+        
+        updateSelectedCount();
+    }
+
+    // 更新选中数量
+    function updateSelectedCount() {
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        var allCheckboxes = document.querySelectorAll('.file-checkbox');
+        var count = checkboxes.length;
+        var totalCount = allCheckboxes.length;
+        var selectedCount = document.getElementById('selectedCount');
+        var extractWatermarkBtn = document.getElementById('extractWatermarkBtn');
+        var selectAll = document.getElementById('selectAll');
+        
+        // 更新选中数量显示
+        selectedCount.textContent = '已选择 ' + count + ' 个文件';
+        
+        // 更新全选框状态
+        if (count === 0) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        } else if (count === totalCount) {
+            selectAll.checked = true;
+            selectAll.indeterminate = false;
+        } else {
+            selectAll.checked = false;
+            selectAll.indeterminate = true;
+        }
+        
+        // 更新按钮状态
+        extractWatermarkBtn.disabled = count === 0;
+        
+        // 更新选中文件列表
+        selectedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    }
+
+    // 为选中文件提取水印
+    function extractWatermarkFromSelected() {
+        if (selectedFiles.length === 0) {
+            alert('请先选择要提取水印的文件');
+            return;
+        }
+        
+        // 开始处理第一个文件
+        var firstFileId = selectedFiles[0];
+        var remainingFiles = selectedFiles.slice(1);
+        var url = "{{ url_for('audio_extract_from_file', file_id=0) }}".replace('0', firstFileId);
+        if (remainingFiles.length > 0) {
+            url += '?selected=' + remainingFiles.join(',');
+        }
+        window.location.href = url;
+    }
+
+    // 添加键盘快捷键支持
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+A 全选
+        if (e.ctrlKey && e.key === 'a') {
+            e.preventDefault();
+            var selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                selectAll.checked = !selectAll.checked;
+                toggleSelectAll();
+            }
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}
+
+
+
