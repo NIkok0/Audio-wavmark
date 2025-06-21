@@ -18,7 +18,7 @@ def embed(input_file, watermark, algorithm):
 
     # 直接生成函数名
     function_name = f"embed_{algorithm.lower()}"
-    im = Image.open(input_file)
+    
     try:
         # 获取当前模块中的函数
         embed_function = globals().get(function_name)
@@ -26,7 +26,7 @@ def embed(input_file, watermark, algorithm):
             raise ValueError(f"图像水印算法 {algorithm} 的实现函数 {function_name} 不存在")
         
         # 调用算法，获取处理后的图像对象
-        processed_image = embed_function(im, watermark)
+        processed_image = embed_function(input_file, watermark)
         
         # 文件保存逻辑
         original_name = os.path.basename(input_file)
@@ -64,10 +64,10 @@ def extract(input_file, algorithm):
         raise
 
 # 具体算法实现
-def embed_lsb(im, watermark):
+def embed_lsb(input_file, watermark):
     """LSB算法实现 - 只处理算法，不保存文件"""
     print("image_watermark_embed!")
-    
+    im = Image.open(input_file)
     im = im.convert('L')  # 转化为灰度图片
     
     # 为了避免压缩影响，先转换为BMP格式处理
