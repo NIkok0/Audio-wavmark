@@ -1,6 +1,11 @@
-from watermark import db
+# Standard library imports
 from datetime import datetime
+
+# Third-party imports
 from flask_login import UserMixin
+
+# Local imports
+from watermark import db
 
 # 1. 用户-组 多对多关联表
 user_group_rel = db.Table('user_group_rel',

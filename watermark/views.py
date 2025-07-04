@@ -1,30 +1,34 @@
-from flask import render_template, Flask, redirect, url_for, request, flash, session, jsonify, abort
-from flask_bootstrap import Bootstrap
-from watermark.forms.login_form import LoginForm
-from watermark.forms.watermark_form import WatermarkForm
-from watermark.forms.register_form import RegisterForm
-import os
+# Standard library imports
 import hashlib
-from watermark.models import User, Group, File
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import login_user, login_required, current_user, logout_user
-from flask_login import LoginManager
-from werkzeug.utils import secure_filename
-import re
-# from watermark.watermarkSystem import watermarks_select  # 已替换为AlgorithmSelector
-from watermark.utils.algorithm_selector import AlgorithmSelector
-from watermark.utils.file_config import get_file_type_by_extension, validate_file_size
-# from watermark.utils.logger import OperationLogger
-from flask import send_file, current_app
-import json
-from watermark import app, db
 import mimetypes
+import os
+import re
 from datetime import datetime
-from watermark.utils.file_config import get_file_size_info
-# 使用配置中的文件路径
 
+# Third-party imports
+from flask import (
+    abort, current_app, flash, jsonify, redirect, render_template,
+    request, send_file, session, url_for
+)
+from flask_login import current_user, login_required, login_user, logout_user
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+# Local imports
+from watermark import app, db
+from watermark.forms.login_form import LoginForm
+from watermark.forms.register_form import RegisterForm
+from watermark.forms.watermark_form import WatermarkForm
+from watermark.models import File, Group, User
+from watermark.utils.algorithm_selector import AlgorithmSelector
+from watermark.utils.file_config import (
+    get_file_size_info, get_file_type_by_extension, validate_file_size
+)
+
+# 使用配置中的文件路径
 temp_dir = app.config['TEMP_FOLDER']
 logs_dir = app.config['LOGS_FOLDER']
+
 def get_upload_path(media_type):
     """获取指定媒体类型的上传路径"""
     return app.config['MEDIA_FOLDERS'][media_type]['upload']
@@ -36,7 +40,6 @@ def get_extract_path(media_type):
 def get_embed_path(media_type):
     """获取指定媒体类型的嵌入路径"""
     return app.config['MEDIA_FOLDERS'][media_type]['embed']
-
 
 def secure_filename_with_chinese(filename):
     """支持中文的安全文件名处理函数"""
@@ -60,6 +63,100 @@ def calculate_file_hash(file_path):
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
+
+def handle_file_upload(file, media_type):
+    print("handle_file_upload")
+    """处理文件上传的通用函数"""
+    if not file:
+        return None, "没有选择文件"
+    
+    filename = secure_filename_with_chinese(file.filename)
+    extension = os.path.splitext(filename)[1][1:].lower()
+    
+    # 验证文件类型
+    file_type = get_file_type_by_extension(extension)
+    if not file_type or file_type != media_type:
+        return None, f"不支持的文件类型: {extension}"
+    
+    # 验证文件大小
+    if not validate_file_size(file.content_length, extension):
+        size_info = get_file_size_info(extension)
+        max_size = size_info['max_size'] if size_info else "未知"
+        return None, f"文件大小超过限制 (最大: {format_file_size(max_size)})"
+    
+    # 获取上传路径
+    upload_path = get_upload_path(media_type)
+    if not os.path.exists(upload_path):
+        os.makedirs(upload_path)
+    
+    # 生成唯一文件名
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    unique_filename = f"{timestamp}_{filename}"
+    file_path = os.path.join(upload_path, unique_filename)
+    
+    try:
+        file.save(file_path)
+        # 获取文件信息
+        file_size = os.path.getsize(file_path)
+        mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+        file_hash = calculate_file_hash(file_path)
+        return file_path, None, {
+            'file_size': file_size,
+            'mime_type': mime_type,
+            'file_hash': file_hash,
+            'file_format': extension
+        }
+    except Exception as e:
+        return None, f"文件保存失败: {str(e)}", None
+
+def process_watermark(file_path, watermark_text, operation_type='embed', file_id=None):
+    """处理水印的通用函数"""
+    try:
+        selector = AlgorithmSelector()
+        if operation_type == 'embed':
+            result = selector.select_algorithm(file_path, watermark_text)
+            return result.get('result'), result.get('algorithm'), None
+        else:  # extract
+            if file_id:
+                # 从数据库获取文件记录
+                file_record = File.query.get(file_id)
+                if file_record and file_record.watermark_type:
+                    # 使用存储的算法提取水印
+                    print("use this")
+                    extracted_text = selector.extract_watermark(file_path, file_record.watermark_type)
+                else:
+                    # 如果没有记录算法，使用默认算法
+                    extracted_text = selector.extract_watermark(file_path)
+            else:
+                # 如果没有提供 file_id，使用默认算法
+                extracted_text = selector.extract_watermark(file_path)
+            return extracted_text, None, None
+    except Exception as e:
+        return None, None, str(e)
+
+def get_user_files(user, file_type, has_watermark=None):
+    """获取用户的文件列表"""
+    # 获取用户所在的组
+    user_group_ids = [group.id for group in user.groups]
+    
+    # 构建基本查询
+    query = File.query.filter_by(file_type=file_type)
+    
+    # 如果指定了水印状态，添加过滤条件
+    if has_watermark is not None:
+        query = query.filter_by(has_watermark=has_watermark)
+    
+    # 根据用户组或用户ID过滤
+    if user_group_ids:
+        query = query.filter(
+            (File.group_id.in_(user_group_ids)) |
+            (File.uploader_id == user.id)
+        )
+    else:
+        query = query.filter_by(uploader_id=user.id)
+    
+    # 按创建时间降序排序
+    return query.order_by(File.created_at.desc()).all()
 
 #主页
 @app.route('/', methods=['GET', 'POST'])
@@ -130,10 +227,6 @@ def signin():
 def signout():
     logout_user()
     return redirect(url_for('index'))
-
-
-
-
 
 #文件下载
 @app.route('/download/<int:file_id>', methods=['GET'])
@@ -238,8 +331,6 @@ def delete_file(file_id):
                 return redirect(url_for('text_extract_watermark'))
     return redirect(url_for('index'))
 
-
-
 # 清除提取结果
 @app.route('/clear_extract_result', methods=['POST'])
 @login_required
@@ -307,70 +398,43 @@ def image_process():
 @login_required
 def image_upload():
     if request.method == 'POST':
-        f = request.files.get('file')
-        if not f:
-            return '没有选择文件', 400
-            
-        if '.' not in f.filename:
-            return '文件名无效', 400
-        file_ext = f.filename.rsplit('.', 1)[1].lower()
-        if file_ext not in ['jpg', 'jpeg', 'png', 'bmp', 'gif']:
-            return f'不支持的图片格式: {file_ext}', 400
-            
-        original_filename = secure_filename_with_chinese(f.filename)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
-        file_path = os.path.join(get_upload_path('image'), unique_filename)
+        if 'file' not in request.files:
+            return jsonify({'error': '没有文件被上传'})
         
-        try:
-            f.save(file_path)
-            file_size = os.path.getsize(file_path)
-            mime_type = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
-            file_hash = calculate_file_hash(file_path)
-            
-            if not validate_file_size(file_size, 'image'):
-                os.remove(file_path)
-                return '文件大小超出限制', 400
-            
-            file_record = File(
-                filename=original_filename,
-                original_path=file_path,
-                file_hash=file_hash,
-                file_type='image',
-                file_format=file_ext,
-                file_size=file_size,
-                mime_type=mime_type,
-                uploader_id=current_user.id,
-                group_id=current_user.groups[0].id if current_user.groups else None,
-                processing_status='pending'
-            )
-            
-            db.session.add(file_record)
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'file_id': file_record.id,
-                'filename': original_filename,
-                'file_type': 'image'
-            })
-            
-        except Exception as e:
-            return jsonify({'error': f'上传失败: {str(e)}'}), 500
-    
-    # 获取当前用户的文件列表
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'image'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'})
+        
+        # 使用通用文件上传处理函数
+        file_path, error, file_info = handle_file_upload(file, 'image')
+        if error:
+            return jsonify({'error': error})
+        
+        # 保存文件记录到数据库
+        file_record = File(
+            filename=os.path.basename(file_path),
+            original_path=file_path,
+            file_hash=file_info['file_hash'],
+            file_type='image',
+            file_format=file_info['file_format'],
+            file_size=file_info['file_size'],
+            mime_type=file_info['mime_type'],
             uploader_id=current_user.id,
-            file_type='image'
-        ).order_by(File.created_at.desc()).all()
+            group_id=current_user.groups[0].id if current_user.groups else None,
+            processing_status='pending',
+            has_watermark=False
+        )
+        db.session.add(file_record)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': '文件上传成功',
+            'file_id': file_record.id
+        })
     
+    # 获取用户的图片文件列表
+    files = get_user_files(current_user, 'image')
     return render_template('image/upload.html', files=files)
 
 @app.route('/image/add_watermark', methods=['GET', 'POST'])
@@ -409,30 +473,29 @@ def image_add_watermark():
         
         success_count = 0
         error_count = 0
-        selector = AlgorithmSelector()
         
         for file in files:
             try:
                 file.processing_status = 'processing'
                 db.session.commit()
                 
-                result = selector.select_algorithm(
-                    'image', 
-                    file.original_path, 
-                    form.watermark.data
+                result, algorithm, error = process_watermark(
+                    file.original_path,
+                    form.watermark.data,
+                    'embed'
                 )
                 
-                if result['success']:
-                    file.watermarked_path = result['result']
+                if result and not error:
+                    file.watermarked_path = result
                     file.has_watermark = True
-                    file.watermark_type = result['algorithm']
+                    file.watermark_type = algorithm
                     file.watermark_text = form.watermark.data
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
                     file.processing_status = 'failed'
-                    file.error_message = '水印处理失败'
+                    file.error_message = error or '水印处理失败'
                     error_count += 1
                     
             except Exception as e:
@@ -449,75 +512,105 @@ def image_add_watermark():
         
         return redirect(url_for('image_add_watermark'))
     
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'image'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='image'
-        ).order_by(File.created_at.desc()).all()
+    # 获取当前用户的文件列表
+    files = get_user_files(current_user, 'image')
     
     return render_template('image/add_watermark.html', form=form, files=files)
 
 @app.route('/image/extract_watermark', methods=['GET', 'POST'])
 @login_required
 def image_extract_watermark():
-    extracted_files = session.get('image_extracted_files', {})
-    files = File.query.filter_by(uploader_id=current_user.id, file_type='image', has_watermark=True).all()
-    return render_template('image/extract_watermark.html', extracted_files=extracted_files, files=files)
+    if request.method == 'POST':
+        # 处理批量提取
+        selected_file_ids = request.form.getlist('selected_files')
+        if selected_file_ids:
+            results = {}
+            for file_id in selected_file_ids:
+                try:
+                    file_record = File.query.get(file_id)
+                    if not file_record or file_record.uploader_id != current_user.id:
+                        continue
+                    
+                    # 提取水印
+                    extracted_text, _, error = process_watermark(
+                        file_record.watermarked_path,
+                        None,
+                        'extract',
+                        file_id # 传递文件ID
+                    )
+                    
+                    if not error:
+                        results[file_record.filename] = extracted_text
+                    
+                except Exception as e:
+                    continue
+            
+            # 将结果存储到session中
+            session['extracted_watermarks'] = results
+            return redirect(url_for('image_extract_watermark'))
+        
+        # 处理单个文件上传提取
+        if 'file' not in request.files:
+            return jsonify({'error': '没有文件被上传'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'})
+        
+        # 使用通用文件上传处理函数
+        file_path, error = handle_file_upload(file, 'image')
+        if error:
+            return jsonify({'error': error})
+        
+        # 提取水印
+        extracted_text, _, error = process_watermark(file_path, None, 'extract')
+        
+        # 删除临时文件
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        if error:
+            return jsonify({'error': f'水印提取失败: {error}'})
+        
+        return jsonify({
+            'success': True,
+            'extracted_text': extracted_text
+        })
+    
+    # 获取已添加水印的文件列表
+    files = get_user_files(current_user, 'image', has_watermark=True)
+    # 获取之前的提取结果
+    extracted_watermarks = session.pop('extracted_watermarks', {})
+    
+    return render_template('image/extract_watermark.html',
+                         files=files,
+                         extracted_watermarks=extracted_watermarks)
 
 @app.route('/image/extract_from_file/<int:file_id>')
 @login_required
 def image_extract_from_file(file_id):
-    file = File.query.get_or_404(file_id)
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
     
-    if file.uploader_id != current_user.id or file.file_type != 'image':
-        flash('您没有权限提取该文件的水印')
-        return redirect(url_for('image_extract_watermark'))
+    # 提取水印
+    extracted_text, _, error = process_watermark(
+        file_record.watermarked_path,
+        None,
+        'extract',
+        file_id # 传递文件ID
+    )
     
-    if not file.has_watermark:
-        flash('该文件尚未添加水印')
-        return redirect(url_for('image_extract_watermark'))
+    if error:
+        return jsonify({'error': f'水印提取失败: {error}'})
     
-    if not file.watermarked_path or not os.path.exists(file.watermarked_path):
-        flash(f'无法找到水印文件: {file.filename}')
-        return redirect(url_for('image_extract_watermark'))
-    
-    try:
-        algorithm = file.watermark_type 
-        selector = AlgorithmSelector()
-        result = selector.extract_watermark(
-            'image', 
-            file.watermarked_path, 
-            algorithm=algorithm
-        )
-        
-        # 将结果存储到session中，使用类型前缀
-        extracted_files = session.get('image_extracted_files', {})
-        extracted_files[file.filename] = result
-        session['image_extracted_files'] = extracted_files
-        
-        flash(f"水印提取成功")
-        
-    except Exception as e:
-        flash(f"水印提取失败: {str(e)}")
-    
-    # 检查是否是批量操作
-    if 'selected' in request.args:
-        selected_ids = request.args.get('selected').split(',')
-        # 如果还有其他文件需要处理
-        remaining_ids = [id for id in selected_ids if int(id) != file_id]
-        if remaining_ids:
-            # 继续处理下一个文件
-            next_id = remaining_ids[0]
-            new_selected = ','.join(remaining_ids)
-            return redirect(url_for('image_extract_from_file', file_id=next_id, selected=new_selected))
-    
-    return redirect(url_for('image_extract_watermark'))
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text
+    })
 
 # 音频处理相关路由
 @app.route('/audio/process')
@@ -536,7 +629,7 @@ def audio_upload():
         if '.' not in f.filename:
             return '文件名无效', 400
         file_ext = f.filename.rsplit('.', 1)[1].lower()
-        if file_ext not in ['mp3', 'wav', 'flac', 'aac']:
+        if file_ext not in ['mp3', 'wav', 'flac', 'aac', 'ogg']:
             return f'不支持的音频格式: {file_ext}', 400
             
         original_filename = secure_filename_with_chinese(f.filename)
@@ -631,30 +724,29 @@ def audio_add_watermark():
         
         success_count = 0
         error_count = 0
-        selector = AlgorithmSelector()
         
         for file in files:
             try:
                 file.processing_status = 'processing'
                 db.session.commit()
                 
-                result = selector.select_algorithm(
-                    'audio', 
-                    file.original_path, 
-                    form.watermark.data
+                result, algorithm, error = process_watermark(
+                    file.original_path,
+                    form.watermark.data,
+                    'embed'
                 )
                 
-                if result['success']:
-                    file.watermarked_path = result['result']
+                if result and not error:
+                    file.watermarked_path = result
                     file.has_watermark = True
-                    file.watermark_type = result['algorithm']
+                    file.watermark_type = algorithm
                     file.watermark_text = form.watermark.data
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
                     file.processing_status = 'failed'
-                    file.error_message = '水印处理失败'
+                    file.error_message = error or '水印处理失败'
                     error_count += 1
                     
             except Exception as e:
@@ -671,75 +763,105 @@ def audio_add_watermark():
         
         return redirect(url_for('audio_add_watermark'))
     
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'audio'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='audio'
-        ).order_by(File.created_at.desc()).all()
+    # 获取当前用户的文件列表
+    files = get_user_files(current_user, 'audio')
     
     return render_template('audio/add_watermark.html', form=form, files=files)
 
 @app.route('/audio/extract_watermark', methods=['GET', 'POST'])
 @login_required
 def audio_extract_watermark():
-    extracted_files = session.get('audio_extracted_files', {})
-    files = File.query.filter_by(uploader_id=current_user.id, file_type='audio', has_watermark=True).all()
-    return render_template('audio/extract_watermark.html', extracted_files=extracted_files, files=files)
+    if request.method == 'POST':
+        # 处理批量提取
+        selected_file_ids = request.form.getlist('selected_files')
+        if selected_file_ids:
+            results = {}
+            for file_id in selected_file_ids:
+                try:
+                    file_record = File.query.get(file_id)
+                    if not file_record or file_record.uploader_id != current_user.id:
+                        continue
+                    
+                    # 提取水印
+                    extracted_text, _, error = process_watermark(
+                        file_record.watermarked_path,
+                        None,
+                        'extract',
+                        file_id # 传递文件ID
+                    )
+                    
+                    if not error:
+                        results[file_record.filename] = extracted_text
+                    
+                except Exception as e:
+                    continue
+            
+            # 将结果存储到session中
+            session['extracted_watermarks'] = results
+            return redirect(url_for('audio_extract_watermark'))
+        
+        # 处理单个文件上传提取
+        if 'file' not in request.files:
+            return jsonify({'error': '没有文件被上传'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'})
+        
+        # 使用通用文件上传处理函数
+        file_path, error = handle_file_upload(file, 'audio')
+        if error:
+            return jsonify({'error': error})
+        
+        # 提取水印
+        extracted_text, _, error = process_watermark(file_path, None, 'extract')
+        
+        # 删除临时文件
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        if error:
+            return jsonify({'error': f'水印提取失败: {error}'})
+        
+        return jsonify({
+            'success': True,
+            'extracted_text': extracted_text
+        })
+    
+    # 获取已添加水印的文件列表
+    files = get_user_files(current_user, 'audio', has_watermark=True)
+    # 获取之前的提取结果
+    extracted_watermarks = session.pop('extracted_watermarks', {})
+    
+    return render_template('audio/extract_watermark.html',
+                         files=files,
+                         extracted_watermarks=extracted_watermarks)
 
 @app.route('/audio/extract_from_file/<int:file_id>')
 @login_required
 def audio_extract_from_file(file_id):
-    file = File.query.get_or_404(file_id)
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
     
-    if file.uploader_id != current_user.id or file.file_type != 'audio':
-        flash('您没有权限提取该文件的水印')
-        return redirect(url_for('audio_extract_watermark'))
+    # 提取水印
+    extracted_text, _, error = process_watermark(
+        file_record.watermarked_path,
+        None,
+        'extract',
+        file_id # 传递文件ID
+    )
     
-    if not file.has_watermark:
-        flash('该文件尚未添加水印')
-        return redirect(url_for('audio_extract_watermark'))
+    if error:
+        return jsonify({'error': f'水印提取失败: {error}'})
     
-    if not file.watermarked_path or not os.path.exists(file.watermarked_path):
-        flash(f'无法找到水印文件: {file.filename}')
-        return redirect(url_for('audio_extract_watermark'))
-    
-    try:
-        algorithm = file.watermark_type 
-        selector = AlgorithmSelector()
-        result = selector.extract_watermark(
-            'audio', 
-            file.watermarked_path, 
-            algorithm=algorithm
-        )
-        
-        # 将结果存储到session中，使用类型前缀
-        extracted_files = session.get('audio_extracted_files', {})
-        extracted_files[file.filename] = result
-        session['audio_extracted_files'] = extracted_files
-        
-        flash(f"水印提取成功")
-        
-    except Exception as e:
-        flash(f"水印提取失败: {str(e)}")
-    
-    # 检查是否是批量操作
-    if 'selected' in request.args:
-        selected_ids = request.args.get('selected').split(',')
-        # 如果还有其他文件需要处理
-        remaining_ids = [id for id in selected_ids if int(id) != file_id]
-        if remaining_ids:
-            # 继续处理下一个文件
-            next_id = remaining_ids[0]
-            new_selected = ','.join(remaining_ids)
-            return redirect(url_for('audio_extract_from_file', file_id=next_id, selected=new_selected))
-    
-    return redirect(url_for('audio_extract_watermark'))
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text
+    })
 
 # 视频处理相关路由
 @app.route('/video/process')
@@ -853,30 +975,29 @@ def video_add_watermark():
         
         success_count = 0
         error_count = 0
-        selector = AlgorithmSelector()
         
         for file in files:
             try:
                 file.processing_status = 'processing'
                 db.session.commit()
                 
-                result = selector.select_algorithm(
-                    'video', 
-                    file.original_path, 
-                    form.watermark.data
+                result, algorithm, error = process_watermark(
+                    file.original_path,
+                    form.watermark.data,
+                    'embed'
                 )
                 
-                if result['success']:
-                    file.watermarked_path = result['result']
+                if result and not error:
+                    file.watermarked_path = result
                     file.has_watermark = True
-                    file.watermark_type = result['algorithm']
+                    file.watermark_type = algorithm
                     file.watermark_text = form.watermark.data
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
                     file.processing_status = 'failed'
-                    file.error_message = '水印处理失败'
+                    file.error_message = error or '水印处理失败'
                     error_count += 1
                     
             except Exception as e:
@@ -893,75 +1014,105 @@ def video_add_watermark():
         
         return redirect(url_for('video_add_watermark'))
     
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'video'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='video'
-        ).order_by(File.created_at.desc()).all()
+    # 获取当前用户的文件列表
+    files = get_user_files(current_user, 'video')
     
     return render_template('video/add_watermark.html', form=form, files=files)
 
 @app.route('/video/extract_watermark', methods=['GET', 'POST'])
 @login_required
 def video_extract_watermark():
-    extracted_files = session.get('video_extracted_files', {})
-    files = File.query.filter_by(uploader_id=current_user.id, file_type='video', has_watermark=True).all()
-    return render_template('video/extract_watermark.html', extracted_files=extracted_files, files=files)
+    if request.method == 'POST':
+        # 处理批量提取
+        selected_file_ids = request.form.getlist('selected_files')
+        if selected_file_ids:
+            results = {}
+            for file_id in selected_file_ids:
+                try:
+                    file_record = File.query.get(file_id)
+                    if not file_record or file_record.uploader_id != current_user.id:
+                        continue
+                    
+                    # 提取水印
+                    extracted_text, _, error = process_watermark(
+                        file_record.watermarked_path,
+                        None,
+                        'extract',
+                        file_id # 传递文件ID
+                    )
+                    
+                    if not error:
+                        results[file_record.filename] = extracted_text
+                    
+                except Exception as e:
+                    continue
+            
+            # 将结果存储到session中
+            session['extracted_watermarks'] = results
+            return redirect(url_for('video_extract_watermark'))
+        
+        # 处理单个文件上传提取
+        if 'file' not in request.files:
+            return jsonify({'error': '没有文件被上传'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'})
+        
+        # 使用通用文件上传处理函数
+        file_path, error = handle_file_upload(file, 'video')
+        if error:
+            return jsonify({'error': error})
+        
+        # 提取水印
+        extracted_text, _, error = process_watermark(file_path, None, 'extract')
+        
+        # 删除临时文件
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        if error:
+            return jsonify({'error': f'水印提取失败: {error}'})
+        
+        return jsonify({
+            'success': True,
+            'extracted_text': extracted_text
+        })
+    
+    # 获取已添加水印的文件列表
+    files = get_user_files(current_user, 'video', has_watermark=True)
+    # 获取之前的提取结果
+    extracted_watermarks = session.pop('extracted_watermarks', {})
+    
+    return render_template('video/extract_watermark.html',
+                         files=files,
+                         extracted_watermarks=extracted_watermarks)
 
 @app.route('/video/extract_from_file/<int:file_id>')
 @login_required
 def video_extract_from_file(file_id):
-    file = File.query.get_or_404(file_id)
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
     
-    if file.uploader_id != current_user.id or file.file_type != 'video':
-        flash('您没有权限提取该文件的水印')
-        return redirect(url_for('video_extract_watermark'))
+    # 提取水印
+    extracted_text, _, error = process_watermark(
+        file_record.watermarked_path,
+        None,
+        'extract',
+        file_id # 传递文件ID
+    )
     
-    if not file.has_watermark:
-        flash('该文件尚未添加水印')
-        return redirect(url_for('video_extract_watermark'))
+    if error:
+        return jsonify({'error': f'水印提取失败: {error}'})
     
-    if not file.watermarked_path or not os.path.exists(file.watermarked_path):
-        flash(f'无法找到水印文件: {file.filename}')
-        return redirect(url_for('video_extract_watermark'))
-    
-    try:
-        algorithm = file.watermark_type 
-        selector = AlgorithmSelector()
-        result = selector.extract_watermark(
-            'video', 
-            file.watermarked_path, 
-            algorithm=algorithm
-        )
-        
-        # 将结果存储到session中，使用类型前缀
-        extracted_files = session.get('video_extracted_files', {})
-        extracted_files[file.filename] = result
-        session['video_extracted_files'] = extracted_files
-        
-        flash(f"水印提取成功")
-        
-    except Exception as e:
-        flash(f"水印提取失败: {str(e)}")
-    
-    # 检查是否是批量操作
-    if 'selected' in request.args:
-        selected_ids = request.args.get('selected').split(',')
-        # 如果还有其他文件需要处理
-        remaining_ids = [id for id in selected_ids if int(id) != file_id]
-        if remaining_ids:
-            # 继续处理下一个文件
-            next_id = remaining_ids[0]
-            new_selected = ','.join(remaining_ids)
-            return redirect(url_for('video_extract_from_file', file_id=next_id, selected=new_selected))
-    
-    return redirect(url_for('video_extract_watermark'))
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text
+    })
 
 # 文档处理相关路由
 @app.route('/text/process')
@@ -1075,30 +1226,29 @@ def text_add_watermark():
         
         success_count = 0
         error_count = 0
-        selector = AlgorithmSelector()
         
         for file in files:
             try:
                 file.processing_status = 'processing'
                 db.session.commit()
                 
-                result = selector.select_algorithm(
-                    'text', 
-                    file.original_path, 
-                    form.watermark.data
+                result, algorithm, error = process_watermark(
+                    file.original_path,
+                    form.watermark.data,
+                    'embed'
                 )
                 
-                if result['success']:
-                    file.watermarked_path = result['result']
+                if result and not error:
+                    file.watermarked_path = result
                     file.has_watermark = True
-                    file.watermark_type = result['algorithm']
+                    file.watermark_type = algorithm
                     file.watermark_text = form.watermark.data
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
                     file.processing_status = 'failed'
-                    file.error_message = '水印处理失败'
+                    file.error_message = error or '水印处理失败'
                     error_count += 1
                     
             except Exception as e:
@@ -1115,72 +1265,102 @@ def text_add_watermark():
         
         return redirect(url_for('text_add_watermark'))
     
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'text'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='text'
-        ).order_by(File.created_at.desc()).all()
+    # 获取当前用户的文件列表
+    files = get_user_files(current_user, 'text')
     
     return render_template('text/add_watermark.html', form=form, files=files)
 
 @app.route('/text/extract_watermark', methods=['GET', 'POST'])
 @login_required
 def text_extract_watermark():
-    extracted_files = session.get('text_extracted_files', {})
-    files = File.query.filter_by(uploader_id=current_user.id, file_type='text', has_watermark=True).all()
-    return render_template('text/extract_watermark.html', extracted_files=extracted_files, files=files)
+    if request.method == 'POST':
+        # 处理批量提取
+        selected_file_ids = request.form.getlist('selected_files')
+        if selected_file_ids:
+            results = {}
+            for file_id in selected_file_ids:
+                try:
+                    file_record = File.query.get(file_id)
+                    if not file_record or file_record.uploader_id != current_user.id:
+                        continue
+                    
+                    # 提取水印
+                    extracted_text, _, error = process_watermark(
+                        file_record.watermarked_path,
+                        None,
+                        'extract',
+                        file_id # 传递文件ID
+                    )
+                    
+                    if not error:
+                        results[file_record.filename] = extracted_text
+                    
+                except Exception as e:
+                    continue
+            
+            # 将结果存储到session中
+            session['extracted_watermarks'] = results
+            return redirect(url_for('text_extract_watermark'))
+        
+        # 处理单个文件上传提取
+        if 'file' not in request.files:
+            return jsonify({'error': '没有文件被上传'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'})
+        
+        # 使用通用文件上传处理函数
+        file_path, error = handle_file_upload(file, 'text')
+        if error:
+            return jsonify({'error': error})
+        
+        # 提取水印
+        extracted_text, _, error = process_watermark(file_path, None, 'extract')
+        
+        # 删除临时文件
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        if error:
+            return jsonify({'error': f'水印提取失败: {error}'})
+        
+        return jsonify({
+            'success': True,
+            'extracted_text': extracted_text
+        })
+    
+    # 获取已添加水印的文件列表
+    files = get_user_files(current_user, 'text', has_watermark=True)
+    # 获取之前的提取结果
+    extracted_watermarks = session.pop('extracted_watermarks', {})
+    
+    return render_template('text/extract_watermark.html',
+                         files=files,
+                         extracted_watermarks=extracted_watermarks)
 
 @app.route('/text/extract_from_file/<int:file_id>')
 @login_required
 def text_extract_from_file(file_id):
-    file = File.query.get_or_404(file_id)
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
     
-    if file.uploader_id != current_user.id or file.file_type != 'text':
-        flash('您没有权限提取该文件的水印')
-        return redirect(url_for('text_extract_watermark'))
+    # 提取水印
+    extracted_text, _, error = process_watermark(
+        file_record.watermarked_path,
+        None,
+        'extract',
+        file_id # 传递文件ID
+    )
     
-    if not file.has_watermark:
-        flash('该文件尚未添加水印')
-        return redirect(url_for('text_extract_watermark'))
+    if error:
+        return jsonify({'error': f'水印提取失败: {error}'})
     
-    if not file.watermarked_path or not os.path.exists(file.watermarked_path):
-        flash(f'无法找到水印文件: {file.filename}')
-        return redirect(url_for('text_extract_watermark'))
-    
-    try:
-        algorithm = file.watermark_type 
-        selector = AlgorithmSelector()
-        result = selector.extract_watermark(
-            'text', 
-            file.watermarked_path, 
-            algorithm=algorithm
-        )
-        
-        # 将结果存储到session中，使用类型前缀
-        extracted_files = session.get('text_extracted_files', {})
-        extracted_files[file.filename] = result
-        session['text_extracted_files'] = extracted_files
-        
-        flash(f"水印提取成功")
-        
-    except Exception as e:
-        flash(f"水印提取失败: {str(e)}")
-    
-    # 检查是否是批量操作
-    if 'selected' in request.args:
-        selected_ids = request.args.get('selected').split(',')
-        # 如果还有其他文件需要处理
-        remaining_ids = [id for id in selected_ids if int(id) != file_id]
-        if remaining_ids:
-            # 继续处理下一个文件
-            next_id = remaining_ids[0]
-            new_selected = ','.join(remaining_ids)
-            return redirect(url_for('text_extract_from_file', file_id=next_id, selected=new_selected))
-    
-    return redirect(url_for('text_extract_watermark'))
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text
+    })

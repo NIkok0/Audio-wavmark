@@ -1,29 +1,27 @@
-from PIL import Image
-from numpy import *
+# Standard library imports
 import os
+
+# Third-party imports
+import numpy as np
+from PIL import Image
 from flask import current_app
 
-# 嵌入水印
-def bin_value(value, bitsize):
-    """将整数转化为固定长度的二进制字符串"""
-    binval = bin(value)[2:]
-    if len(binval) > bitsize:
-        print("Too Large!")
-    while len(binval) < bitsize:
-        binval = "0" + binval
-    return binval
 
 def embed(input_file, watermark, algorithm):
     """图像水印嵌入 - 负责算法调用和文件保存"""
-
-    # 直接生成函数名
-    function_name = f"embed_{algorithm.lower()}"
+    
+    # 获取文件扩展名
+    _, extension = os.path.splitext(input_file)
+    extension = extension[1:].lower()
+    
+    # 生成函数名 (格式: embed_扩展名_算法名)
+    function_name = f"embed_{extension}_{algorithm.lower()}"
     
     try:
         # 获取当前模块中的函数
         embed_function = globals().get(function_name)
         if embed_function is None:
-            raise ValueError(f"图像水印算法 {algorithm} 的实现函数 {function_name} 不存在")
+            raise ValueError(f"图像水印算法 {algorithm} 不支持 {extension} 格式")
         
         # 调用算法，获取处理后的图像对象
         processed_image = embed_function(input_file, watermark)
@@ -31,7 +29,7 @@ def embed(input_file, watermark, algorithm):
         # 文件保存逻辑
         original_name = os.path.basename(input_file)
         name_without_ext = os.path.splitext(original_name)[0]
-        filename = f"{name_without_ext}_embed.bmp"
+        filename = f"{name_without_ext}_embed.{extension}"
         
         # 从app.config获取保存路径
         embed_dir = current_app.config['MEDIA_FOLDERS']['image']['embed']
@@ -48,14 +46,18 @@ def embed(input_file, watermark, algorithm):
 
 def extract(input_file, algorithm):
     """图像水印提取 - 支持多种算法（基于配置）"""
-    # 直接生成函数名
-    function_name = f"extract_{algorithm.lower()}"
+    # 获取文件扩展名
+    _, extension = os.path.splitext(input_file)
+    extension = extension[1:].lower()
+    
+    # 生成函数名 (格式: extract_扩展名_算法名)
+    function_name = f"extract_{extension}_{algorithm.lower()}"
     
     try:
         # 获取当前模块中的函数
         extract_function = globals().get(function_name)
         if extract_function is None:
-            raise ValueError(f"图像水印算法 {algorithm} 的提取函数 {function_name} 不存在")
+            raise ValueError(f"图像水印算法 {algorithm} 不支持 {extension} 格式")
         
         return extract_function(input_file)
         
@@ -63,126 +65,115 @@ def extract(input_file, algorithm):
         print(f"图像水印提取算法 {algorithm} 失败: {str(e)}")
         raise
 
-# 具体算法实现
-def embed_lsb(input_file, watermark):
-    """LSB算法实现 - 只处理算法，不保存文件"""
-    print("image_watermark_embed!")
-    im = Image.open(input_file)
-    im = im.convert('L')  # 转化为灰度图片
+# 具体算法实现 - BMP格式
+def embed_bmp_lsb(input_file, watermark):
+    """使用 LSB 算法在 BMP 图像中嵌入水印"""
+    # 打开图像
+    img = Image.open(input_file)
+    # 转换为 RGB 模式（如果不是的话）
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
     
-    # 为了避免压缩影响，先转换为BMP格式处理
-    temp_file = "temp_processing.bmp"
-    im.save(temp_file)
-    im = Image.open(temp_file)
-
-    im_array = array(im)  # 转化为数组
-    row, col = im_array.shape
-    im_array_flatten = im_array.flatten()  # 转化为一位数组
-
-    # 将水印字符串转换为UTF-8编码的字节
-    data_bytes = watermark.encode('utf-8')
-    data_length = len(data_bytes)
+    # 获取图像数据
+    pixels = np.array(img)
+    
+    # 将水印文本转换为二进制
+    watermark_bits = ''.join(format(ord(c), '08b') for c in watermark)
+    watermark_length = len(watermark_bits)
     
     # 检查图像容量是否足够
-    if row * col < 32 + data_length * 8:
-        # 清理临时文件
-        try:
-            os.remove(temp_file)
-        except:
-            pass
-        raise ValueError(f"图像容量不足，无法嵌入长度为{data_length}字节的水印")
-        
-    bindata = bin_value(data_length, 32)  # 使用32位来存储长度
-
-    index = 0
-    for c in bindata:  # 把长度嵌入
-        if int(c) == 0:
-            im_array_flatten[index] = im_array_flatten[index] & 254
-        else:
-            im_array_flatten[index] = im_array_flatten[index] | 1
-        index += 1
-
-    for byte in data_bytes:  # 把内容嵌入
-        for c in bin_value(byte, 8):
-            if int(c) == 0:
-                im_array_flatten[index] = im_array_flatten[index] & 254
-            else:
-                im_array_flatten[index] = im_array_flatten[index] | 1
-            index += 1
-
-    # 重构图像
-    image_array_embed = reshape(im_array_flatten, (row, col))
-    im_embed = Image.fromarray(image_array_embed)
+    if watermark_length > pixels.size:
+        raise ValueError("水印太长，图像容量不足")
     
-    # 清理临时文件
-    try:
-        os.remove(temp_file)
-    except:
-        pass
+    # 在图像的最低有效位嵌入水印
+    bit_index = 0
+    for i in range(pixels.shape[0]):
+        for j in range(pixels.shape[1]):
+            for k in range(pixels.shape[2]):
+                if bit_index < watermark_length:
+                    # 修改最低有效位
+                    pixels[i, j, k] = (pixels[i, j, k] & ~1) | int(watermark_bits[bit_index])
+                    bit_index += 1
+                else:
+                    break
+            if bit_index >= watermark_length:
+                break
+        if bit_index >= watermark_length:
+            break
     
-    # 只返回处理后的图像对象，不保存文件
-    return im_embed
+    # 创建新图像
+    processed_image = Image.fromarray(pixels)
+    return processed_image
 
-def extract_lsb(input_file):
-    """LSB算法提取 - 已实现"""
-    print("image_watermark_extract!")
-    im = Image.open(input_file)
-    im_array = array(im)  # 转化为数组
-    im_array_flatten = im_array.flatten()  # 转化为一位数组
-    
-    # 提取水印长度（32位）
-    str_length = ''
-    index = 0
-    while index < 32:
-        if im_array_flatten[index] == im_array_flatten[index] & 254:
-            str_length = str_length + '0'
-        else:
-            str_length = str_length + '1'
-        index += 1
+# JPG格式的LSB实现
+def embed_jpg_lsb(input_file, watermark):
+    """使用 LSB 算法在 JPG 图像中嵌入水印"""
+    # 由于 JPG 的有损压缩特性，先将其转换为 BMP
+    img = Image.open(input_file)
+    return embed_bmp_lsb(img, watermark)
 
-    length = int(str_length, 2)
-    
-    # 提取水印字节
-    bytes_data = bytearray()
-    for i in range(length):
-        byte_value = 0
-        for bit_position in range(8):
-            bit = 0
-            if im_array_flatten[index] & 1:
-                bit = 1
-            byte_value = (byte_value << 1) | bit
-            index += 1
-        bytes_data.append(byte_value)
-    
-    # 将字节转换回UTF-8字符串
-    try:
-        result = bytes_data.decode('utf-8')
-    except UnicodeDecodeError:
-        result = "水印解码失败，可能是损坏的数据"
+# PNG格式的LSB实现
+def embed_png_lsb(input_file, watermark):
+    """使用 LSB 算法在 PNG 图像中嵌入水印"""
+    # PNG 可以直接使用 BMP 的实现
+    return embed_bmp_lsb(input_file, watermark)
 
-    print(result)
-    return result
+# 提取实现
+def extract_bmp_lsb(input_file):
+    return "test"
+def extract_jpg_lsb(input_file):
+    return "test"
 
-def embed_dct(input_file, watermark):
-    """DCT算法实现 - 后期实现"""
-    raise NotImplementedError("DCT算法尚未实现")
+def extract_png_lsb(input_file):
+    return "test"
 
-def embed_cox(input_file, watermark):
-    """Cox算法实现 - 后期实现"""
-    raise NotImplementedError("Cox算法尚未实现")
+# DCT算法实现
+def embed_jpg_dct(input_file, watermark):
+    """DCT算法实现 - JPG格式专用"""
+    raise NotImplementedError("JPG格式的DCT水印算法尚未实现")
 
-def embed_dwt(input_file, watermark):
-    """DWT算法实现 - 后期实现"""
-    raise NotImplementedError("DWT算法尚未实现")
+def extract_jpg_dct(input_file):
+    """DCT算法提取 - JPG格式专用"""
+    raise NotImplementedError("JPG格式的DCT水印提取算法尚未实现")
 
-def extract_dct(input_file):
-    """DCT算法实现 - 后期实现"""
-    raise NotImplementedError("DCT算法尚未实现")
+def embed_bmp_dct(input_file, watermark):
+    """DCT算法实现 - BMP格式专用"""
+    raise NotImplementedError("BMP格式的DCT水印算法尚未实现")
 
-def extract_cox(input_file):
-    """Cox算法实现 - 后期实现"""
-    raise NotImplementedError("Cox算法尚未实现")
+def extract_bmp_dct(input_file):
+    """DCT算法提取 - BMP格式专用"""
+    raise NotImplementedError("BMP格式的DCT水印提取算法尚未实现")
 
-def extract_dwt(input_file):
-    """DWT算法实现 - 后期实现"""
-    raise NotImplementedError("DWT算法尚未实现")
+# Cox算法实现
+def embed_jpg_cox(input_file, watermark):
+    """Cox算法实现 - JPG格式专用"""
+    raise NotImplementedError("JPG格式的Cox水印算法尚未实现")
+
+def extract_jpg_cox(input_file):
+    """Cox算法提取 - JPG格式专用"""
+    raise NotImplementedError("JPG格式的Cox水印提取算法尚未实现")
+
+def embed_bmp_cox(input_file, watermark):
+    """Cox算法实现 - BMP格式专用"""
+    raise NotImplementedError("BMP格式的Cox水印算法尚未实现")
+
+def extract_bmp_cox(input_file):
+    """Cox算法提取 - BMP格式专用"""
+    raise NotImplementedError("BMP格式的Cox水印提取算法尚未实现")
+
+# DWT算法实现
+def embed_jpg_dwt(input_file, watermark):
+    """DWT算法实现 - JPG格式专用"""
+    raise NotImplementedError("JPG格式的DWT水印算法尚未实现")
+
+def extract_jpg_dwt(input_file):
+    """DWT算法提取 - JPG格式专用"""
+    raise NotImplementedError("JPG格式的DWT水印提取算法尚未实现")
+
+def embed_bmp_dwt(input_file, watermark):
+    """DWT算法实现 - BMP格式专用"""
+    raise NotImplementedError("BMP格式的DWT水印算法尚未实现")
+
+def extract_bmp_dwt(input_file):
+    """DWT算法提取 - BMP格式专用"""
+    raise NotImplementedError("BMP格式的DWT水印提取算法尚未实现")

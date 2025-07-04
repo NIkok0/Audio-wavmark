@@ -1,70 +1,37 @@
-FFMPEG_BIN = "ffmpeg.exe"
-
-import subprocess as sp
-import numpy
-import watermark.utils.robust as robust
-import os
+# Standard library imports
 import json
+import os
+import subprocess as sp
+
+# Third-party imports
 import cv2
 import numpy as np
-from PIL import Image
 from flask import current_app
-
-def bin_value(value, bitsize):
-    """将整数转化为固定长度的二进制字符串"""
-    binval = bin(value)[2:]
-    if len(binval) > bitsize:
-        print("Too Large!")
-    while len(binval) < bitsize:
-        binval = "0" + binval
-    return binval
-
-def get_video_info(video_path):
-    """获取视频信息，包括分辨率"""
-    try:
-        command = [FFMPEG_BIN, 
-                  '-i', video_path, 
-                  '-v', 'error',
-                  '-select_streams', 'v:0', 
-                  '-show_entries', 'stream=width,height,pix_fmt', 
-                  '-of', 'json']
-        
-        result = sp.run(command, stdout=sp.PIPE, stderr=sp.PIPE)
-        video_info = json.loads(result.stdout)
-        
-        width = int(video_info['streams'][0]['width'])
-        height = int(video_info['streams'][0]['height'])
-        pix_fmt = video_info['streams'][0]['pix_fmt'] if 'pix_fmt' in video_info['streams'][0] else 'yuv420p'
-        
-        # 确保分辨率是8的倍数，方便DCT处理
-        width = (width // 8) * 8
-        height = (height // 8) * 8
-        
-        return width, height, pix_fmt
-    except Exception as e:
-        print(f"获取视频信息失败: {str(e)}")
-        # 返回默认分辨率
-        return 1920, 1080, 'yuv420p'
 
 def embed(input_file, watermark, algorithm):
     """视频水印嵌入 - 负责算法调用和文件保存"""
     
-    # 直接生成函数名
-    function_name = f"embed_{algorithm.lower()}"
+    # 获取文件扩展名
+    _, extension = os.path.splitext(input_file)
+    extension = extension[1:].lower()
+    
+    # 生成函数名 (格式: embed_扩展名_算法名)
+    function_name = f"embed_{extension}_{algorithm.lower()}"
     
     try:
         # 获取当前模块中的函数
         embed_function = globals().get(function_name)
         if embed_function is None:
-            raise ValueError(f"视频水印算法 {algorithm} 的实现函数 {function_name} 不存在")
+            raise ValueError(f"视频水印算法 {algorithm} 不支持 {extension} 格式")
         
         # 调用算法，获取处理后的视频对象
         processed_video = embed_function(input_file, watermark)
         
+        
         # 文件保存逻辑
         original_name = os.path.basename(input_file)
         name_without_ext = os.path.splitext(original_name)[0]
-        filename = f"{name_without_ext}_embed.mp4"
+        filename = f"{name_without_ext}_embed.{extension}"
         
         # 从app.config获取保存路径
         embed_dir = current_app.config['MEDIA_FOLDERS']['video']['embed']
@@ -83,14 +50,18 @@ def embed(input_file, watermark, algorithm):
 
 def extract(input_file, algorithm):
     """视频水印提取 - 支持多种算法（基于配置）"""
-    # 直接生成函数名
-    function_name = f"extract_{algorithm.lower()}"
+    # 获取文件扩展名
+    _, extension = os.path.splitext(input_file)
+    extension = extension[1:].lower()
+    
+    # 生成函数名 (格式: extract_扩展名_算法名)
+    function_name = f"extract_{extension}_{algorithm.lower()}"
     
     try:
         # 获取当前模块中的函数
         extract_function = globals().get(function_name)
         if extract_function is None:
-            raise ValueError(f"视频水印算法 {algorithm} 的提取函数 {function_name} 不存在")
+            raise ValueError(f"视频水印算法 {algorithm} 不支持 {extension} 格式")
         
         return extract_function(input_file)
         
@@ -98,38 +69,98 @@ def extract(input_file, algorithm):
         print(f"视频水印提取算法 {algorithm} 失败: {str(e)}")
         raise
 
-def embed_dct(input_file, watermark):
-    print("video_watermark_embed!")
-    return input_file
+# MP4格式的DCT实现
+def embed_mp4_dct(input_file, watermark):
+    """DCT算法实现 - MP4格式专用"""
+    print("video_watermark_embed for MP4!")
+    try:
+        with open(input_file, 'rb') as file:
+            video_content = file.read()
+            # 这里可以添加水印处理逻辑
+            return video_content  # 返回视频文件内容
+    except Exception as e:
+        print(f"处理视频文件失败: {str(e)}")
+        return None
 
-
-def extract_dct(input_file):
-    print("video_watermark_extract!")
+def extract_mp4_dct(input_file):
+    """DCT算法提取 - MP4格式专用"""
+    print("video_watermark_extract for MP4!")
     return "test"
 
-def embed_cox(input_file, watermark):
-    """Cox算法实现 - 后期实现"""
-    raise NotImplementedError("视频Cox算法尚未实现")
+# AVI格式的DCT实现
+def embed_avi_dct(input_file, watermark):
+    """DCT算法实现 - AVI格式专用"""
+    print("video_watermark_embed for AVI!")
+    return input_file
 
-def embed_lsb(input_file, watermark):
-    """LSB算法实现 - 后期实现"""
-    raise NotImplementedError("视频LSB算法尚未实现")
+def extract_avi_dct(input_file):
+    """DCT算法提取 - AVI格式专用"""
+    print("video_watermark_extract for AVI!")
+    return "test"
 
-def embed_dwt(input_file, watermark):
-    """DWT算法实现 - 后期实现"""
-    raise NotImplementedError("视频DWT算法尚未实现")
+# MXF格式的DCT实现
+def embed_mxf_dct(input_file, watermark):
+    """DCT算法实现 - MXF格式专用"""
+    print("video_watermark_embed for MXF!")
+    return input_file
 
-def extract_cox(input_file):
-    """Cox算法提取 - 后期实现"""
-    raise NotImplementedError("视频Cox算法尚未实现")
+def extract_mxf_dct(input_file):
+    """DCT算法提取 - MXF格式专用"""
+    print("video_watermark_extract for MXF!")
+    return "test"
 
-def extract_lsb(input_file):
-    """LSB算法提取 - 后期实现"""
-    raise NotImplementedError("视频LSB算法尚未实现")
 
-def extract_dwt(input_file):
-    """DWT算法提取 - 后期实现"""
-    raise NotImplementedError("视频DWT算法尚未实现")
+
+# Cox算法实现
+def embed_mp4_cox(input_file, watermark):
+    """Cox算法实现 - MP4格式专用"""
+    raise NotImplementedError("MP4格式的Cox水印算法尚未实现")
+
+def extract_mp4_cox(input_file):
+    """Cox算法提取 - MP4格式专用"""
+    raise NotImplementedError("MP4格式的Cox水印提取算法尚未实现")
+
+def embed_avi_cox(input_file, watermark):
+    """Cox算法实现 - AVI格式专用"""
+    raise NotImplementedError("AVI格式的Cox水印算法尚未实现")
+
+def extract_avi_cox(input_file):
+    """Cox算法提取 - AVI格式专用"""
+    raise NotImplementedError("AVI格式的Cox水印提取算法尚未实现")
+
+# LSB算法实现
+def embed_mp4_lsb(input_file, watermark):
+    """LSB算法实现 - MP4格式专用"""
+    raise NotImplementedError("MP4格式的LSB水印算法尚未实现")
+
+def extract_mp4_lsb(input_file):
+    """LSB算法提取 - MP4格式专用"""
+    raise NotImplementedError("MP4格式的LSB水印提取算法尚未实现")
+
+def embed_avi_lsb(input_file, watermark):
+    """LSB算法实现 - AVI格式专用"""
+    raise NotImplementedError("AVI格式的LSB水印算法尚未实现")
+
+def extract_avi_lsb(input_file):
+    """LSB算法提取 - AVI格式专用"""
+    raise NotImplementedError("AVI格式的LSB水印提取算法尚未实现")
+
+# DWT算法实现
+def embed_mp4_dwt(input_file, watermark):
+    """DWT算法实现 - MP4格式专用"""
+    raise NotImplementedError("MP4格式的DWT水印算法尚未实现")
+
+def extract_mp4_dwt(input_file):
+    """DWT算法提取 - MP4格式专用"""
+    raise NotImplementedError("MP4格式的DWT水印提取算法尚未实现")
+
+def embed_avi_dwt(input_file, watermark):
+    """DWT算法实现 - AVI格式专用"""
+    raise NotImplementedError("AVI格式的DWT水印算法尚未实现")
+
+def extract_avi_dwt(input_file):
+    """DWT算法提取 - AVI格式专用"""
+    raise NotImplementedError("AVI格式的DWT水印提取算法尚未实现")
 
 
 

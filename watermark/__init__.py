@@ -1,22 +1,23 @@
+# Standard library imports
 import os
-import sys
 import datetime
 
+# Third-party imports
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_login import LoginManager
-from flask_login import current_user
 from flask_bootstrap import Bootstrap
 from flask_dropzone import Dropzone
+from flask_login import LoginManager, current_user
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
 
+# Initialize Flask app
 app = Flask(__name__)
-# 初始化扩展，传入程序实例 app
 
 # 配置文件路径
 app.config['INSTANCE_PATH'] = os.getenv('INSTANCE_PATH', 'instance')
 app.config['TEMP_FOLDER'] = os.path.join(app.config['INSTANCE_PATH'], 'temp')
 app.config['LOGS_FOLDER'] = os.path.join(app.config['INSTANCE_PATH'], 'logs')
+
 # 按媒体类型分类的文件存储路径配置
 app.config['MEDIA_FOLDERS'] = {
     'image': {
@@ -105,7 +106,6 @@ def path_exists_filter(path):
 @app.context_processor
 def inject_user():
     return dict(user=current_user)
-# 这个函数自动注册这里面的资源到每个页面的上下文环境中，所以可以在模板中直接使用user变量。
 
 @app.context_processor
 def inject_now():
@@ -117,4 +117,5 @@ def load_user(user_id):  # 创建用户加载回调函数，接受用户 ID 作�
     user = User.query.get(int(user_id))  # 用 ID 作为 User 模型的主键查询对应的用户
     return user  # 返回用户对象
 
+# Local imports
 from watermark import views, commands
