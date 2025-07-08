@@ -130,6 +130,22 @@ def process_watermark(file_path, watermark_text, operation_type='embed', file_id
             else:
                 # 如果没有提供 file_id，使用默认算法
                 extracted_text = selector.extract_watermark(file_path)
+            
+            # 确保返回的是字符串类型
+            if extracted_text is not None:
+                # 如果是numpy数组，转换为字符串
+                if hasattr(extracted_text, 'tolist'):
+                    extracted_text = str(extracted_text.tolist())
+                # 如果是bytes，解码为字符串
+                elif isinstance(extracted_text, bytes):
+                    try:
+                        extracted_text = extracted_text.decode('utf-8')
+                    except UnicodeDecodeError:
+                        extracted_text = str(extracted_text)
+                # 如果是其他类型，转换为字符串
+                elif not isinstance(extracted_text, str):
+                    extracted_text = str(extracted_text)
+            
             return extracted_text, None, None
     except Exception as e:
         return None, None, str(e)
@@ -565,12 +581,6 @@ def image_extract_watermark():
         # 提取水印
         extracted_text, _, error = process_watermark(file_path, None, 'extract')
         
-        # 删除临时文件
-        try:
-            os.remove(file_path)
-        except:
-            pass
-        
         if error:
             return jsonify({'error': f'水印提取失败: {error}'})
         
@@ -815,12 +825,6 @@ def audio_extract_watermark():
         
         # 提取水印
         extracted_text, _, error = process_watermark(file_path, None, 'extract')
-        
-        # 删除临时文件
-        try:
-            os.remove(file_path)
-        except:
-            pass
         
         if error:
             return jsonify({'error': f'水印提取失败: {error}'})
@@ -1067,12 +1071,6 @@ def video_extract_watermark():
         # 提取水印
         extracted_text, _, error = process_watermark(file_path, None, 'extract')
         
-        # 删除临时文件
-        try:
-            os.remove(file_path)
-        except:
-            pass
-        
         if error:
             return jsonify({'error': f'水印提取失败: {error}'})
         
@@ -1317,12 +1315,6 @@ def text_extract_watermark():
         
         # 提取水印
         extracted_text, _, error = process_watermark(file_path, None, 'extract')
-        
-        # 删除临时文件
-        try:
-            os.remove(file_path)
-        except:
-            pass
         
         if error:
             return jsonify({'error': f'水印提取失败: {error}'})
