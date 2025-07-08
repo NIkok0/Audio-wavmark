@@ -22,7 +22,7 @@ from watermark.forms.watermark_form import WatermarkForm
 from watermark.models import File, Group, User
 from watermark.utils.algorithm_selector import AlgorithmSelector
 from watermark.utils.file_config import (
-    get_file_size_info, get_file_type_by_extension, validate_file_size
+    get_file_size_info, get_file_type_by_extension, validate_file_size,format_file_size
 )
 
 # 使用配置中的文件路径
