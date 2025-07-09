@@ -217,8 +217,6 @@ learn_flask_the_easy_way/
 │       └── watermark_text.py      # 文本水印处理
 ├── migrations/               # 数据库迁移文件
 ├── instance/                 # 实例配置
-├── test_file/               # 测试文件目录
-├── upload/                   # 上传文件存储
 ├── README.md                 # 项目说明
 └── README_ALGORITHM.md       # 算法集成指南
 ```
