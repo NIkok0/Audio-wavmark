@@ -193,26 +193,122 @@ FILE_TYPE_CONFIG = {
             'txt': {
                 'mime_type': 'text/plain',
                 'algorithms': {
-                    'LSB': {
-                        'name': 'LSB隐写',
-                        'description': '文本LSB隐写算法',
+                    'ZBIT': {
+                        'name': 'ZBIT隐写',
+                        'description': '文本ZBIT隐写算法',
                         'implemented': True,
                         'priority': 1
                     }
                 },
-                'default_algorithm': 'LSB'
+                'default_algorithm': 'ZBIT'
+            },
+            'doc': {
+                'mime_type': 'application/msword',
+                'algorithms': {
+                    'SPACE': {
+                        'name': 'SPACE隐写',
+                        'description': '文本SPACE隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'SPACE'
+            },
+            'docx': {
+                'mime_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'algorithms': {
+                    'SPACE': {
+                        'name': 'SPACE隐写',
+                        'description': '文本SPACE隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'SPACE'
+            },
+            'xlsx': {
+                'mime_type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'algorithms': {
+                    'NS': {
+                        'name': 'NS隐写',
+                        'description': '文本NS隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'NS'
+            },
+            'xml': {
+                'mime_type': 'application/xml',
+                'algorithms': {
+                    'SPACE': {
+                        'name': 'ZBIT隐写',
+                        'description': '文本ZBIT隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'ZBIT'
+            },
+            'xls': {
+                'mime_type': 'application/vnd.ms-excel',
+                'algorithms': {
+                    'NS': {
+                        'name': 'NS隐写',
+                        'description': '文本NS隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'NS'
             },
             'pdf': {
                 'mime_type': 'application/pdf',
                 'algorithms': {
-                    'LSB': {
-                        'name': 'LSB隐写',
-                        'description': '文本LSB隐写算法',
+                    'MD': {
+                        'name': 'MD隐写',
+                        'description': '文本MD隐写算法',
                         'implemented': True,
                         'priority': 1
                     }
                 },
-                'default_algorithm': 'LSB'
+                'default_algorithm': 'MD'
+            },
+            'md': {
+                'mime_type': 'text/markdown',
+                'algorithms': {
+                    'ZBIT': {
+                        'name': 'ZBIT隐写',
+                        'description': '文本ZBIT隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'ZBIT'
+            },
+            'sql': {
+                'mime_type': 'application/sql',
+                'algorithms': {
+                    'ZBIT': {
+                        'name': 'ZBIT隐写',
+                        'description': '文本ZBIT隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'ZBIT'
+            },
+            'csv': {
+                'mime_type': 'text/csv',
+                'algorithms': {
+                    'ZBIT': {
+                        'name': 'ZBIT隐写',
+                        'description': '文本ZBIT隐写算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'ZBIT'
             }
         },
         'max_size': get_max_size_from_env('text')

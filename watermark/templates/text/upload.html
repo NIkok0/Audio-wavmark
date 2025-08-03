@@ -254,7 +254,7 @@
             <p class="lead">拖拽文档到这里或点击选择文档</p>
             <p class="text-muted">支持的格式：TXT, DOC, DOCX, PDF（支持多选）</p>
             <form id="uploadForm" action="{{ url_for('text_upload') }}" method="post" enctype="multipart/form-data">
-                <input type="file" id="fileInput" name="file" style="display: none;" accept=".txt,.doc,.docx,.pdf" multiple>
+                <input type="file" id="fileInput" name="file" style="display: none;" accept=".txt,.doc,.docx,.pdf,.xlsx,.xml,.xls,.md,.sql,.csv" multiple>
                 <div class="button-container">
                     <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
                         选择文档

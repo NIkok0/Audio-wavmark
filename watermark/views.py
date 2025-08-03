@@ -1129,7 +1129,7 @@ def text_upload():
         if '.' not in f.filename:
             return '文件名无效', 400
         file_ext = f.filename.rsplit('.', 1)[1].lower()
-        if file_ext not in ['txt', 'doc', 'docx', 'pdf']:
+        if file_ext not in ['txt', 'doc', 'docx', 'pdf','xlsx','xml','xls','md','sql','csv']:
             return f'不支持的文档格式: {file_ext}', 400
             
         original_filename = secure_filename_with_chinese(f.filename)
