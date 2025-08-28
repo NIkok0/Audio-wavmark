@@ -70,7 +70,6 @@
 1. **克隆项目**
 ```bash
 git clone <repository-url>
-cd learn_flask_the_easy_way
 ```
 
 2. **创建虚拟环境**
@@ -88,6 +87,7 @@ pip install -r requirements.txt
 
 4. **初始化数据库**
 ```bash
+$env:FLASK_APP="watermark"
 flask initdb 
 ```
 
