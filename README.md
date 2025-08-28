@@ -92,6 +92,9 @@ pip install -r requirements.txt
 
 4. **初始化数据库**
 ```bash
+在.flaskenv中调整自己的mysql数据库密码和端口
+```
+```bash
 $env:FLASK_APP="watermark"
 flask initdb 
 ```
