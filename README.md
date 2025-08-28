@@ -79,6 +79,10 @@ source venv/bin/activate  # Linux/Mac
 # 或
 venv\Scripts\activate  # Windows
 ```
+```bash
+conda 环境创建
+（建议使用conda环境）
+```
 
 3. **安装依赖**
 ```bash
