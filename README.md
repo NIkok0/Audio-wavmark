@@ -79,6 +79,7 @@ source venv/bin/activate  # Linux/Mac
 # 或
 venv\Scripts\activate  # Windows
 ```
+或者
 ```bash
 conda 环境创建
 （建议使用conda环境）
