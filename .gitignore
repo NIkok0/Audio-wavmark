@@ -9,5 +9,6 @@ embed_file/
 extracted_file/
 migrations/
 .flaskenv
-
+ckpts/y_256b_img.pth
+ffprobe.exe
 
