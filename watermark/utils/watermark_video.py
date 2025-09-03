@@ -1,12 +1,21 @@
 # Standard library imports
 import json
-import os
 import subprocess as sp
-
-# Third-party imports
-import cv2
 import numpy as np
+import wave
 from flask import current_app
+# Third-party imports
+
+import os
+import ffmpeg
+import numpy as np
+import subprocess
+import torch
+import tqdm
+
+from . import videoseal
+from .videoseal.models import Videoseal
+from .videoseal.evals.metrics import bit_accuracy
 
 def embed(input_file, watermark, algorithm):
     """视频水印嵌入 - 负责算法调用和文件保存"""
@@ -73,94 +82,272 @@ def extract(input_file, algorithm):
 def embed_mp4_dct(input_file, watermark):
     """DCT算法实现 - MP4格式专用"""
     print("video_watermark_embed for MP4!")
-    try:
-        with open(input_file, 'rb') as file:
-            video_content = file.read()
-            # 这里可以添加水印处理逻辑
-            return video_content  # 返回视频文件内容
-    except Exception as e:
-        print(f"处理视频文件失败: {str(e)}")
-        return None
+    class Args:
+        input = input_file
+        output = current_app.config['MEDIA_FOLDERS']['video']['embed']
+
+    args = Args()
+    os.makedirs(args.output, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    video_model = videoseal.load("videoseal")
+    video_model.eval()
+    video_model.to(device)
+    video_model.compile()
+    # current_dir = os.getcwd()
+    # 文件保存逻辑
+    original_name = os.path.basename(args.input)
+    name_without_ext = os.path.splitext(original_name)[0]
+    # filename = f"{name_without_ext}_embed.{'png'}"
+    filename = f"{name_without_ext}_embed.{'mp4'}"
+    full_path = os.path.join(args.output, filename)
+    # output = os.path.join(current_dir, args.output)
+    msgs_ori = embed_video(video_model, args.input, args.output, 16, watermark, full_path)
+
+        
+    return full_path  # 返回完整路径
+
+# MP4格式的DCT实现
+def embed_avi_dct(input_file, watermark):
+    """DCT算法实现 - AVI格式专用"""
+    print("video_watermark_embed for AVI!")
+    class Args:
+        input = input_file
+        output = current_app.config['MEDIA_FOLDERS']['video']['embed']
+
+    args = Args()
+    os.makedirs(args.output, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    video_model = videoseal.load("videoseal")
+    video_model.eval()
+    video_model.to(device)
+    video_model.compile()
+    current_dir = os.getcwd()
+    # 文件保存逻辑
+    original_name = os.path.basename(args.input)
+    name_without_ext = os.path.splitext(original_name)[0]
+    # filename = f"{name_without_ext}_embed.{'png'}"
+    filename = f"{name_without_ext}_embed.{'avi'}"
+
+    full_path = os.path.join(args.output, filename)
+    msgs_ori = embed_video(video_model, args.input, args.output, 16, watermark, full_path)
+
+        
+    return full_path  # 返回完整路径
+
+def bit_tensor_to_string(bits: torch.Tensor, max_chars: int = 32) -> str:
+    bits = bits.squeeze()
+    bits = torch.round(bits).clamp(0, 1).int().tolist()  # Ensure only 0 or 1
+    chars = []
+    for i in range(0, min(len(bits), max_chars * 8), 8):
+        byte = bits[i:i + 8]
+        if len(byte) < 8:
+            break  # Not enough bits for a full character
+        byte_str = ''.join(map(str, byte))
+        chars.append(chr(int(byte_str, 2)))
+    return ''.join(chars)
+
+
+def string_to_bit_tensor(msg: str, target_length: int = 256) -> torch.Tensor:
+    """
+    Converts a string to a 1D bit tensor of shape (1, target_length).
+    Pads with zeros if string is too short.
+    """
+    bits = ''.join(f'{ord(c):08b}' for c in msg)  # Convert each char to 8 bits
+    bits = bits[:target_length]                  # Truncate if longer than 256 bits
+    bits += '0' * (target_length - len(bits))    # Pad with zeros
+    bit_list = [int(b) for b in bits]
+    return torch.tensor([bit_list], dtype=torch.float32)  # Shape: (1, 256)
+
+def embed_video_clip(
+    model: Videoseal, clip: np.ndarray, msgs: torch.Tensor
+) -> np.ndarray:
+    clip_tensor = torch.tensor(clip, dtype=torch.float32).permute(0, 3, 1, 2) / 255.0
+    outputs = model.embed(
+        clip_tensor, msgs=msgs, is_video=True, lowres_attenuation=True
+    )
+    processed_clip = outputs["imgs_w"]
+    processed_clip = (processed_clip * 255.0).byte().permute(0, 2, 3, 1).numpy()
+    return processed_clip
+
+
+def embed_video(
+    model: Videoseal, input_path: str, output_path: str, chunk_size: int, watermark: str, full_path: str, crf: int = 23
+) -> None:
+    
+    # Read video dimensions
+    probe = ffmpeg.probe(input_path)
+    
+    video_info = next(
+        stream for stream in probe["streams"] if stream["codec_type"] == "video"
+    )
+    width = int(video_info["width"])
+    height = int(video_info["height"])
+    fps = float(video_info["r_frame_rate"].split("/")[0]) / float(
+        video_info["r_frame_rate"].split("/")[1]
+    )
+    codec = video_info["codec_name"]
+    num_frames = int(probe["streams"][0]["nb_frames"])
+    # Open the input video
+    process1 = (
+        ffmpeg.input(input_path)
+        .output(
+            "pipe:",
+            format="rawvideo",
+            pix_fmt="rgb24",
+            s="{}x{}".format(width, height),
+            r=fps,
+        )
+        .global_args("-nostats", "-loglevel", "error")
+        .run_async(pipe_stdout=True, pipe_stderr=False)
+    )
+    # Open the output video with optimal thread usage.
+    process2 = (
+        ffmpeg.input(
+            "pipe:",
+            format="rawvideo",
+            pix_fmt="rgb24",
+            s="{}x{}".format(width, height),
+            r=fps,
+        )
+        .output(full_path, vcodec="libx264", pix_fmt="yuv420p", r=fps)
+        .overwrite_output()
+        .global_args("-nostats", "-loglevel", "error")
+        .run_async(pipe_stdin=True, pipe_stderr=False)
+    )
+
+    # Create a random message
+    # msgs = model.get_random_msg()
+    # print(msgs.shape)
+    # Your watermark message (string)
+    msg_string = watermark  # You can replace this with any 6-character string
+
+# Convert to 256-bit message
+    msgs = string_to_bit_tensor(msg_string, target_length=256)
+    # Save original string (for reference)
+    with open(full_path.replace(".mp4", ".txt"), "w") as f:
+        f.write(msg_string)
+    with open(full_path.replace(".mp4", ".txt"), "w") as f:
+        f.write("".join([str(msg.item()) for msg in msgs[0]]))
+    # Process the video
+    frame_size = width * height * 3
+    chunk = np.zeros((chunk_size, height, width, 3), dtype=np.uint8)
+    frames_in_chunk = 0
+
+    for in_bytes in tqdm.tqdm(
+        iter(lambda: process1.stdout.read(frame_size), b""),
+        total=num_frames,
+        desc="Watermark embedding",
+    ):
+        # Convert bytes to frame and add to chunk
+        frame = np.frombuffer(in_bytes, np.uint8).reshape([height, width, 3])
+        chunk[frames_in_chunk] = frame
+        frames_in_chunk += 1
+
+        # Process chunk when full
+        if frames_in_chunk == chunk_size:
+            # print(f"embedding at frame: {frame_idx}")
+            processed_frames = embed_video_clip(model, chunk, msgs)
+            process2.stdin.write(processed_frames.tobytes())
+            frames_in_chunk = 0
+
+    # Process final partial chunk if any
+    if frames_in_chunk > 0:
+        processed_frames = embed_video_clip(model, chunk[:frames_in_chunk], msgs)
+        process2.stdin.write(processed_frames.tobytes())
+
+    process1.stdout.close()
+    process2.stdin.close()
+    process1.wait()
+    process2.wait()
+
+    return msgs
+
+
+def detect_video_clip(model: Videoseal, clip: np.ndarray) -> torch.Tensor:
+    clip_tensor = torch.tensor(clip, dtype=torch.float32).permute(0, 3, 1, 2) / 255.0
+    outputs = model.detect(clip_tensor, is_video=True)
+    output_bits = outputs["preds"][
+        :, 1:
+    ]  # exclude the first which may be used for detection
+    return output_bits
+
+
+def detect_video(model: Videoseal, input_path: str, chunk_size: int) -> None:
+    # Normalize path to avoid cwd issues
+    input_path = os.path.abspath(input_path)
+    # Read video dimensions
+    probe = ffmpeg.probe(input_path)
+    video_info = next(
+        stream for stream in probe["streams"] if stream["codec_type"] == "video"
+    )
+    width = int(video_info["width"])
+    height = int(video_info["height"])
+    codec = video_info["codec_name"]
+    num_frames = int(probe["streams"][0]["nb_frames"])
+
+    # Open the input video
+    process1 = (
+        ffmpeg.input(input_path)
+        .output("pipe:", format="rawvideo", pix_fmt="rgb24")
+        .global_args("-nostats", "-loglevel", "error")
+        .run_async(pipe_stdout=True, pipe_stderr=False)
+    )
+
+    # Process the video
+    frame_size = width * height * 3
+    chunk = np.zeros((chunk_size, height, width, 3), dtype=np.uint8)
+    frame_count = 0
+    soft_msgs = []
+    pbar = tqdm.tqdm(total=num_frames, desc="Watermark extraction")
+    while True:
+        in_bytes = process1.stdout.read(frame_size)
+        if not in_bytes:
+            break
+        frame = np.frombuffer(in_bytes, np.uint8).reshape([height, width, 3])
+        chunk[frame_count % chunk_size] = frame
+        frame_count += 1
+        pbar.update(1)
+        if frame_count % chunk_size == 0:
+            soft_msgs.append(detect_video_clip(model, chunk))
+    process1.stdout.close()
+    process1.wait()
+
+    soft_msgs = torch.cat(soft_msgs, dim=0)
+    soft_msgs = soft_msgs.mean(dim=0)  # Average the predictions across all frames
+    return soft_msgs
+
+
 
 def extract_mp4_dct(input_file):
     """DCT算法提取 - MP4格式专用"""
     print("video_watermark_extract for MP4!")
-    return "test"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# AVI格式的DCT实现
-def embed_avi_dct(input_file, watermark):
-    """DCT算法实现 - AVI格式专用"""
-    print("video_watermark_embed for AVI!")
-    return input_file
+    video_model = videoseal.load("videoseal")
+    video_model.eval()
+    video_model.to(device)
+    video_model.compile()
+
+    soft_msgs = detect_video(video_model, input_file, 16)
+    extracted_string = bit_tensor_to_string(soft_msgs, max_chars=32)
+    print(f"Extracted watermark (as string): {extracted_string}")
+    return extracted_string
 
 def extract_avi_dct(input_file):
-    """DCT算法提取 - AVI格式专用"""
-    print("video_watermark_extract for AVI!")
-    return "test"
+    """DCT算法提取 - avi格式专用"""
+    print("video_watermark_extract for MP4!")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# MXF格式的DCT实现
-def embed_mxf_dct(input_file, watermark):
-    """DCT算法实现 - MXF格式专用"""
-    print("video_watermark_embed for MXF!")
-    return input_file
+    video_model = videoseal.load("videoseal")
+    video_model.eval()
+    video_model.to(device)
+    video_model.compile()
 
-def extract_mxf_dct(input_file):
-    """DCT算法提取 - MXF格式专用"""
-    print("video_watermark_extract for MXF!")
-    return "test"
-
-
-
-# Cox算法实现
-def embed_mp4_cox(input_file, watermark):
-    """Cox算法实现 - MP4格式专用"""
-    raise NotImplementedError("MP4格式的Cox水印算法尚未实现")
-
-def extract_mp4_cox(input_file):
-    """Cox算法提取 - MP4格式专用"""
-    raise NotImplementedError("MP4格式的Cox水印提取算法尚未实现")
-
-def embed_avi_cox(input_file, watermark):
-    """Cox算法实现 - AVI格式专用"""
-    raise NotImplementedError("AVI格式的Cox水印算法尚未实现")
-
-def extract_avi_cox(input_file):
-    """Cox算法提取 - AVI格式专用"""
-    raise NotImplementedError("AVI格式的Cox水印提取算法尚未实现")
-
-# LSB算法实现
-def embed_mp4_lsb(input_file, watermark):
-    """LSB算法实现 - MP4格式专用"""
-    raise NotImplementedError("MP4格式的LSB水印算法尚未实现")
-
-def extract_mp4_lsb(input_file):
-    """LSB算法提取 - MP4格式专用"""
-    raise NotImplementedError("MP4格式的LSB水印提取算法尚未实现")
-
-def embed_avi_lsb(input_file, watermark):
-    """LSB算法实现 - AVI格式专用"""
-    raise NotImplementedError("AVI格式的LSB水印算法尚未实现")
-
-def extract_avi_lsb(input_file):
-    """LSB算法提取 - AVI格式专用"""
-    raise NotImplementedError("AVI格式的LSB水印提取算法尚未实现")
-
-# DWT算法实现
-def embed_mp4_dwt(input_file, watermark):
-    """DWT算法实现 - MP4格式专用"""
-    raise NotImplementedError("MP4格式的DWT水印算法尚未实现")
-
-def extract_mp4_dwt(input_file):
-    """DWT算法提取 - MP4格式专用"""
-    raise NotImplementedError("MP4格式的DWT水印提取算法尚未实现")
-
-def embed_avi_dwt(input_file, watermark):
-    """DWT算法实现 - AVI格式专用"""
-    raise NotImplementedError("AVI格式的DWT水印算法尚未实现")
-
-def extract_avi_dwt(input_file):
-    """DWT算法提取 - AVI格式专用"""
-    raise NotImplementedError("AVI格式的DWT水印提取算法尚未实现")
+    soft_msgs = detect_video(video_model, input_file, 16)
+    extracted_string = bit_tensor_to_string(soft_msgs, max_chars=32)
+    print(f"Extracted watermark (as string): {extracted_string}")
+    return extracted_string
 
 
 

@@ -250,6 +250,10 @@
             <input type="hidden" id="selectedFileIds" name="selected_file_ids" value="">
             <div class="form-group">
                 {{ form.watermark(class="form-control text-center", placeholder="请输入要嵌入的水印内容") }}
+                <small class="form-text text-muted" style="display:block;margin-top:8px;">
+                    输入 <b>1</b> 则使用随机载荷。<br>
+                    载荷示例: <code>[1 0 1 0 1 0 1 0 0 0 1 0 1 0 0 1]</code>
+                </small>
             </div>
             <div class="form-group text-center">
                 {{ form.submit(class="btn btn-primary") }}

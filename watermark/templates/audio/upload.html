@@ -239,7 +239,7 @@
         <div class="alert alert-info">
             <strong>注意</strong>
             <ul style="margin: 10px 0 0 0; text-align: left;">
-                <li>支持的音频格式：MP3, WAV, FLAC, AAC</li>
+                <li>支持的音频格式：MP3, WAV, FLAC, AAC,M4A,OGG</li>
                 <li>最大文件大小：{{ get_max_size_formatted('audio') if get_max_size_formatted is defined else '50MB' }}</li>
                 <li>支持批量上传多个音频文件</li>
                 <li>建议使用无损格式（WAV、FLAC）以获得更好的水印效果</li>
@@ -251,9 +251,9 @@
         <div id="dropZone">
             <i class="glyphicon glyphicon-music upload-icon"></i>
             <p class="lead">拖拽音频到这里或点击选择音频</p>
-            <p class="text-muted">支持的格式：MP3, WAV, FLAC, AAC, OGG（支持多选）</p>
+            <p class="text-muted">支持的格式：MP3, WAV, FLAC, AAC,M4A,OGG（支持多选）</p>
             <form id="uploadForm" action="{{ url_for('audio_upload') }}" method="post" enctype="multipart/form-data">
-                <input type="file" id="fileInput" name="file" style="display: none;" accept=".mp3,.wav,.flac,.aac,.ogg" multiple>
+                <input type="file" id="fileInput" name="file" style="display: none;" accept=".mp3,.wav,.flac,.aac,.m4a，.ogg" multiple>
                 <div class="button-container">
                     <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
                         选择音频

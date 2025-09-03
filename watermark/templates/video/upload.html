@@ -239,7 +239,7 @@
         <div class="alert alert-info">
             <strong>注意</strong>
             <ul style="margin: 10px 0 0 0; text-align: left;">
-                <li>支持的视频格式：MP4, AVI, MKV, MOV</li>
+                <li>支持的视频格式：MP4, AVI</li>
                 <li>最大文件大小：{{ get_max_size_formatted('video') if get_max_size_formatted is defined else '2GB' }}</li>
                 <li>支持批量上传多个视频文件</li>
                 <li>视频处理需要较长时间，请耐心等待</li>
@@ -252,9 +252,9 @@
         <div id="dropZone">
             <i class="glyphicon glyphicon-film upload-icon"></i>
             <p class="lead">拖拽视频到这里或点击选择视频</p>
-            <p class="text-muted">支持的格式：MP4, AVI, MKV, MOV（支持多选）</p>
+            <p class="text-muted">支持的格式：MP4, AVI（支持多选）</p>
             <form id="uploadForm" action="{{ url_for('video_upload') }}" method="post" enctype="multipart/form-data">
-                <input type="file" id="fileInput" name="file" style="display: none;" accept=".mp4,.avi,.mkv,.mov" multiple>
+                <input type="file" id="fileInput" name="file" style="display: none;" accept=".mp4,.avi" multiple>
                 <div class="button-container">
                     <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
                         选择视频

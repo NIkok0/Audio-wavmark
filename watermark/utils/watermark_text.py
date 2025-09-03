@@ -73,7 +73,7 @@ def embed_txt_zbit(input_file, watermark):
         binary = ''.join(format(ord(c), '08b') for c in watermark)
         return ''.join('\u200B' if bit == '0' else '\u200D' for bit in binary)
 
-    def embed_watermark(input_path, output_path, watermark):
+    def embed_watermark(input_path, watermark):
         """在txt中嵌入不可见水印"""
         with open(input_path, 'r', encoding='utf-8') as f:
             content = f.read()

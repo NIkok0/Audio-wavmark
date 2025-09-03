@@ -239,7 +239,7 @@
         <div class="alert alert-info">
             <strong>注意</strong>
             <ul style="margin: 10px 0 0 0; text-align: left;">
-                <li>支持的图片格式：JPG, JPEG, PNG, BMP, GIF</li>
+                <li>支持的图片格式：JPG, JPEG, PNG, BMP</li>
                 <li>最大文件大小：{{ get_max_size_formatted('image') if get_max_size_formatted is defined else '10MB' }}</li>
                 <li>支持批量上传多个图片文件</li>
                 <li>建议使用高质量图片以获得更好的水印效果</li>
@@ -251,9 +251,9 @@
         <div id="dropZone">
             <i class="glyphicon glyphicon-picture upload-icon"></i>
             <p class="lead">拖拽图片到这里或点击选择图片</p>
-            <p class="text-muted">支持的格式：JPG, JPEG, PNG, BMP, GIF（支持多选）</p>
+            <p class="text-muted">支持的格式：JPG, JPEG, PNG, BMP（支持多选）</p>
             <form id="uploadForm" action="{{ url_for('image_upload') }}" method="post" enctype="multipart/form-data">
-                <input type="file" id="fileInput" name="file" style="display: none;" accept=".jpg,.jpeg,.png,.bmp,.gif" multiple>
+                <input type="file" id="fileInput" name="file" style="display: none;" accept=".jpg,.jpeg,.png,.bmp" multiple>
                 <div class="button-container">
                     <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click();">
                         选择图片

@@ -1,9 +1,339 @@
 {% extends "base.html" %}
 {% block title %} - Index - {% endblock %}
+{% block styles %}
+{{ super() }}
+<style>
+    .stat-card { color: #fff; border: 0; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,.08); transition: all .2s ease; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,.12); }
+    .stat-card .card-body { padding: 1.25rem 1.25rem; }
+    .stat-card h6 { opacity: .9; font-weight: 600; letter-spacing: .02em; }
+    .stat-card h3 { font-size: 2rem; margin: 0; font-weight: 800; }
+    .stat-total { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
+    .stat-storage { background: linear-gradient(135deg, #14b8a6 0%, #06b6d4 100%); }
+    .stat-watermarked { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
+    .stat-unwatermarked { background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%); }
+    .stat-sub { font-size: .85rem; opacity: .9; }
+    .stat-wrap { margin-bottom: .25rem; display: flex; align-items: center; justify-content: space-between; }
+    .user-stat-box { border-radius: 10px; background: #f8fafc; border: 1px solid #e9ecef; padding: 12px 14px; height: 100%; }
+    .user-stat-title { font-size: .95rem; color: #6b7280; font-weight: 700; }
+    .user-stat-number { font-size: 1.75rem; font-weight: 800; color: #111827; line-height: 1.2; }
+    /* 顶部介绍区域：加大留白并添加从左到右渐变背景 */
+    .page-header {
+        padding: 48px 28px; /* 加大上下空间 */
+        margin: 0 0 16px 0;
+        border-radius: 16px;
+        background: linear-gradient(90deg, #6366f1 0%, #06b6d4 100%);
+        color: #fff;
+        box-shadow: 0 8px 24px rgba(0,0,0,.08);
+    }
+    .page-header h1 {
+        color: #fff;
+        font-weight: 800;
+        letter-spacing: .02em;
+        margin: 0 0 6px 0;
+    }
+    .page-header p {
+        color: rgba(255,255,255,.95);
+        margin: 0;
+        font-size: 1rem;
+    }
+    /* 登录前统计卡下方的四媒体标签与锚点区块样式 */
+    .media-tabs { gap: 14px; }
+    .media-tabs .nav-link { color: #fff; background: #64748b; border-radius: 12px; padding: .7rem 1.1rem; font-weight: 800; font-size: 1rem; min-width: 120px; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,.12); transition: transform .15s ease, filter .15s ease; }
+    .media-tabs .nav-link:hover { filter: brightness(.95); transform: translateY(-1px); }
+    .media-tabs .tag-image { background: linear-gradient(135deg, #7c3aed, #6366f1); }
+    .media-tabs .tag-audio { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+    .media-tabs .tag-video { background: linear-gradient(135deg, #f59e0b, #ef4444); }
+    .media-tabs .tag-text  { background: linear-gradient(135deg, #10b981, #22c55e); }
+    .media-section { scroll-margin-top: 90px; }
+    html { scroll-behavior: smooth; }
+</style>
+{% endblock %}
 {% block page_content %}
 <div class="page-header">
     <h1>数字水印系统</h1>
-    <p class="">实现图片、音频、视频的水印嵌入与提取。</p>
+    <p class="">实现图片、音频、视频、文档的水印嵌入与提取。</p>
 </div>
+
+<div class="row g-3">
+    <div class="col-md-3">
+        <div class="card stat-card stat-total">
+            <div class="card-body">
+                <div class="stat-wrap"><h6 class="mb-1">系统文件总数</h6></div>
+                <h3 class="mb-0">{{ total_files }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-storage">
+            <div class="card-body">
+                <div class="stat-wrap"><h6 class="mb-1">系统总存储</h6></div>
+                <h3 class="mb-0">{{ total_size_str }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-watermarked">
+            <div class="card-body">
+                <div class="stat-wrap"><h6 class="mb-1">系统已加水印</h6></div>
+                <h3 class="mb-0">{{ watermarked_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-unwatermarked">
+            <div class="card-body">
+                <div class="stat-wrap"><h6 class="mb-1">系统未加水印</h6></div>
+                <h3 class="mb-0">{{ non_watermarked_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# 未登录时在统计卡下显示四媒体标签 #}
+{% if not current_user.is_authenticated %}
+<div class="mt-3">
+    <ul class="nav nav-pills gap-4 media-tabs">
+        <li class="nav-item"><a class="nav-link tag-image" href="#section-image">图片</a></li>
+        <li class="nav-item"><a class="nav-link tag-audio" href="#section-audio">音频</a></li>
+        <li class="nav-item"><a class="nav-link tag-video" href="#section-video">视频</a></li>
+        <li class="nav-item"><a class="nav-link tag-text" href="#section-text">文档</a></li>
+    </ul>
+    <div class="text-muted small mt-2">点击上方彩色方块快速跳转到下方介绍</div>
+    <hr class="mt-3 mb-3"/>
+    <div id="section-image" class="media-section py-3">
+        <h5 class="mb-2">图片水印</h5>
+        <p class="mb-2">支持为图片添加鲁棒水印与提取，适配常见格式，提供可视化结果预览。</p>
+    </div>
+    <hr/>
+    <div id="section-audio" class="media-section py-3">
+        <h5 class="mb-2">音频水印</h5>
+        <p class="mb-2">面向音频的嵌入与提取流程，抗常见压缩与裁剪，支持多段批处理。</p>
+    </div>
+    <hr/>
+    <div id="section-video" class="media-section py-3">
+        <h5 class="mb-2">视频水印</h5>
+        <p class="mb-2">提供视频帧级处理与稳定提取，兼容常见容器与编码格式。</p>
+    </div>
+    <hr/>
+    <div id="section-text" class="media-section py-3">
+        <h5 class="mb-2">文档水印</h5>
+        <p class="mb-2">支持文档/文本内容添加与提取数字水印，追踪来源与完整性。</p>
+    </div>
+    <hr/>
+{% endif %}
+
+{# 移除旧的“我的文件”卡片，合并到下方 #}
+
+{% if current_user.is_authenticated %}
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="mb-3">我的数据概览</h5>
+        {% if user_stats %}
+        <div class="row g-3 mb-2">
+            <div class="col-6 col-md-3">
+                <div class="user-stat-box">
+                    <div class="user-stat-title">我的总数</div>
+                    <div class="user-stat-number">{{ user_stats.total }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="user-stat-box">
+                    <div class="user-stat-title">我的总存储</div>
+                    <div class="user-stat-number">{{ user_stats.total_size_str }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="user-stat-box">
+                    <div class="user-stat-title">我的已加水印</div>
+                    <div class="user-stat-number">{{ user_stats.watermarked }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="user-stat-box">
+                    <div class="user-stat-title">我的未加水印</div>
+                    <div class="user-stat-number">{{ user_stats.non_watermarked }}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-3 text-muted">类型分布</h6>
+                        <canvas id="typesPie" data-payload='{{ {"labels": user_type_labels, "values": user_type_values }|tojson|safe }}' height="280" style="width:100%; display:block;"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-3 text-muted">最近文件</h6>
+                        {% if user_recent_files %}
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle" style="table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width:28%">
+                                    <col style="width:12%">
+                                    <col style="width:14%">
+                                    <col style="width:28%">
+                                    <col style="width:18%">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>文件名</th>
+                                        <th>类型</th>
+                                        <th>大小</th>
+                                        <th>状态</th>
+                                        <th>时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for f in user_recent_files %}
+                                    <tr>
+                                        <td>
+                                            <div class="text-truncate" style="max-width: 100%;" title="{{ f.filename }}">{{ f.filename }}</div>
+                                        </td>
+                                        <td>{{ f.file_type }}</td>
+                                        <td>{{ format_file_size(f.file_size) }}</td>
+                                        <td>
+                                            {% if f.has_watermark %}
+                                            <span class="badge bg-success">已添加水印</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">已上传未添加水印</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-nowrap">{{ f.created_at.strftime('%m-%d %H:%M') if f.created_at else '' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="text-muted">暂无文件</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-3 mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-3 text-muted">最近14天上传数量</h6>
+                        <canvas id="uploadsLine" data-payload='{{ {"labels": user_timeseries_labels, "counts": user_timeseries_counts }|tojson|safe }}' height="300" style="width:100%; display:block;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function() {
+        // 折线图（固定高度，避免自适应导致重排）
+        var lineEl = document.getElementById('uploadsLine');
+        if (lineEl) {
+            var text = lineEl.dataset.payload || '{"labels":[],"counts":[]}';
+            var p = {labels: [], counts: []};
+            try { p = JSON.parse(text); } catch(e) {}
+            var labels = p.labels || [];
+            var data = p.counts || [];
+            // 悬停竖线插件
+            var hoverLine = {
+                id: 'hoverLine',
+                afterDraw(chart, args, pluginOptions) {
+                    const active = chart.getActiveElements();
+                    if (!active || !active.length) return;
+                    const ctx = chart.ctx;
+                    const xScale = chart.scales.x;
+                    const x = active[0].element.x;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, chart.chartArea.top);
+                    ctx.lineTo(x, chart.chartArea.bottom);
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            };
+
+            new Chart(lineEl, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '上传数',
+                        data: data,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    var y = context.parsed.y ?? context.raw;
+                                    return '上传数: ' + y;
+                                }
+                            }
+                        }
+                    },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                },
+                plugins: [hoverLine]
+            });
+        }
+
+        // 饼图（固定高度）
+        var pieEl = document.getElementById('typesPie');
+        if (pieEl) {
+            var tText = pieEl.dataset.payload || '{"labels":[],"values":[]}';
+            var t = {labels: [], values: []};
+            try { t = JSON.parse(tText); } catch(e) {}
+            new Chart(pieEl, {
+                type: 'pie',
+                data: {
+                    labels: t.labels,
+                    datasets: [{
+                        data: t.values,
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.5)',
+                            'rgba(255, 159, 64, 0.5)',
+                            'rgba(153, 102, 255, 0.5)',
+                            'rgba(255, 205, 86, 0.5)'
+                        ],
+                        borderColor: [
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(255, 159, 64, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 205, 86, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+    })();
+</script>
 {% endblock %}
 

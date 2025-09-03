@@ -65,35 +65,68 @@
         .alert-dismissible {
             padding-right: 3rem;
         }
+
+        /* 左侧固定媒体处理侧边栏（仅登录后显示） */
+        .app-sidebar {
+            position: fixed;
+            top: 64px; /* 贴合导航栏下方，若导航高变化可微调 */
+            left: 0;
+            width: 220px;
+            bottom: 0;
+            background: #1f2937; /* 深色侧栏 */
+            color: #e5e7eb;
+            box-shadow: 2px 0 10px rgba(0,0,0,.1);
+            z-index: 1000;
+            padding: 12px 12px 16px 12px;
+        }
+        .app-sidebar .sidebar-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #c7d2fe;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background: rgba(99,102,241,.15);
+        }
+        .app-sidebar .nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: block !important; /* 确保纵向排列，覆盖 Bootstrap .nav 的 flex */
+        }
+        .app-sidebar .nav li { margin-bottom: 6px; }
+        .app-sidebar .nav a {
+            display: block;
+            padding: 10px 12px;
+            color: #e5e7eb;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+        .app-sidebar .nav a:hover,
+        .app-sidebar .nav a.active {
+            background: #374151;
+            color: #fff;
+        }
+        /* 登录后内容区域：右侧面板宽度与居中 */
+        .app-content { margin-left: 220px; width: calc(100% - 220px); }
+        .app-content-inner { max-width: 1140px; margin: 0 auto; }
     </style>
     {% block styles %}{% endblock %}
 </head>
 <body>
     <!-- 主导航栏 -->
     <nav class="navbar navbar-expand-lg">
-        <div class="container">
+        <div class="container-fluid px-0">
             <a class="navbar-brand" href="{{ url_for('index') }}">数字水印系统</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse justify-content-between" id="navbarNav">
-                <!-- 左侧媒体处理菜单 -->
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="mediaDropdown" role="button" data-bs-toggle="dropdown">
-                            媒体处理
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('image_process') }}">图片</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('audio_process') }}">音频</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('video_process') }}">视频</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('text_process') }}">文档</a></li>
-                        </ul>
-                    </li>
-                </ul>
+                <!-- 左侧媒体处理菜单（顶部导航处不再显示） -->
+                <!-- 已根据需求改为登录后显示在左侧固定侧边栏 -->
                 
                 <!-- 右侧用户信息 -->
-                <ul class="navbar-nav">
+                <ul class="navbar-nav ms-auto me-0">
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
                         <span class="nav-link">欢迎，{{ current_user.username }}</span>
@@ -114,8 +147,26 @@
         </div>
     </nav>
 
+    {% if current_user.is_authenticated %}
+    <!-- 左侧固定侧边栏：媒体处理 -->
+    <aside class="app-sidebar">
+        <div class="sidebar-title">媒体处理</div>
+        <ul class="nav">
+            <li><a href="{{ url_for('image_process') }}">图片</a></li>
+            <li><a href="{{ url_for('audio_process') }}">音频</a></li>
+            <li><a href="{{ url_for('video_process') }}">视频</a></li>
+            <li><a href="{{ url_for('text_process') }}">文档</a></li>
+        </ul>
+    </aside>
+    {% endif %}
+
     <!-- 主要内容区域 -->
+    {% if current_user.is_authenticated %}
+    <div class="app-content">
+        <div class="container mt-4 app-content-inner">
+    {% else %}
     <div class="container mt-4">
+    {% endif %}
         {% with messages = get_flashed_messages() %}
         {% if messages %}
         {% for message in messages %}
@@ -130,6 +181,9 @@
         {% endwith %}
 
         {% block page_content %}{% endblock %}
+    {% if current_user.is_authenticated %}
+        </div>
+    {% endif %}
     </div>
 
     <!-- jQuery (Bootstrap 依赖) -->

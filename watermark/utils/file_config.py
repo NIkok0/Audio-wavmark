@@ -20,19 +20,19 @@ FILE_TYPE_CONFIG = {
     'image': {
         'extensions': {
             'jpg': {
-                'mime_type': 'image/jpeg',
+                'mime_type': 'image/jpg',
                 'algorithms': {
                     'LSB': {
                         'name': 'LSB隐写',
                         'description': '最低有效位隐写算法',
-                        'implemented': True,
-                        'priority': 1
+                        'implemented': False,
+                        'priority': 2
                     },
                     'DCT': {
                         'name': 'DCT变换',
                         'description': '离散余弦变换水印算法',
-                        'implemented': False,
-                        'priority': 2
+                        'implemented': True,
+                        'priority': 1
                     },
                     'Cox': {
                         'name': 'Cox算法',
@@ -47,7 +47,7 @@ FILE_TYPE_CONFIG = {
                         'priority': 4
                     }
                 },
-                'default_algorithm': 'LSB'
+                'default_algorithm': 'DCT'
             },
             'jpeg': {
                 'mime_type': 'image/jpeg',
@@ -56,16 +56,16 @@ FILE_TYPE_CONFIG = {
                         'name': 'LSB隐写',
                         'description': '最低有效位隐写算法',
                         'implemented': True,
-                        'priority': 1
+                        'priority': 2
                     },
                     'DCT': {
                         'name': 'DCT变换',
                         'description': '离散余弦变换水印算法',
-                        'implemented': False,
-                        'priority': 2
+                        'implemented': True,
+                        'priority': 1
                     }
                 },
-                'default_algorithm': 'LSB'
+                'default_algorithm': 'DCT'
             },
             'png': {
                 'mime_type': 'image/png',
@@ -73,11 +73,17 @@ FILE_TYPE_CONFIG = {
                     'LSB': {
                         'name': 'LSB隐写',
                         'description': '最低有效位隐写算法',
+                        'implemented': False,
+                        'priority': 2
+                    },
+                    'DCT': {
+                        'name': 'DCT变换',
+                        'description': '离散余弦变换水印算法',
                         'implemented': True,
                         'priority': 1
                     }
                 },
-                'default_algorithm': 'LSB'
+                'default_algorithm': 'DCT'
             },
             'bmp': {
                 'mime_type': 'image/bmp',
@@ -86,10 +92,16 @@ FILE_TYPE_CONFIG = {
                         'name': 'LSB隐写',
                         'description': '最低有效位隐写算法',
                         'implemented': True,
+                        'priority': 2
+                    },
+                    'DCT': {
+                        'name': 'DCT变换',
+                        'description': '离散余弦变换水印算法',
+                        'implemented': True,
                         'priority': 1
                     }
                 },
-                'default_algorithm': 'LSB'
+                'default_algorithm': 'DCT'
             }
         },
         'max_size': get_max_size_from_env('image')
@@ -104,30 +116,12 @@ FILE_TYPE_CONFIG = {
                         'description': '视频DCT水印算法',
                         'implemented': True,
                         'priority': 1
-                    },
-                    'Cox': {
-                        'name': 'Cox算法',
-                        'description': '视频Cox鲁棒水印算法',
-                        'implemented': False,
-                        'priority': 2
                     }
                 },
                 'default_algorithm': 'DCT'
             },
             'avi': {
                 'mime_type': 'video/avi',
-                'algorithms': {
-                    'DCT': {
-                        'name': 'DCT变换',
-                        'description': '视频DCT水印算法',
-                        'implemented': True,
-                        'priority': 1
-                    }
-                },
-                'default_algorithm': 'DCT'
-            },
-            'mxf': {
-                'mime_type': 'application/mxf',
                 'algorithms': {
                     'DCT': {
                         'name': 'DCT变换',
@@ -146,9 +140,9 @@ FILE_TYPE_CONFIG = {
             'ogg': {
                 'mime_type': 'audio/ogg',
                 'algorithms': {
-                    'LSB': {
-                        'name': 'LSB隐写',
-                        'description': '音频LSB隐写算法',
+                    'AI': {
+                        'name': 'AI',
+                        'description': '大模型音频水印嵌入算法',
                         'implemented': True,
                         'priority': 1
                     }
@@ -158,9 +152,9 @@ FILE_TYPE_CONFIG = {
             'mp3': {
                 'mime_type': 'audio/mpeg',
                 'algorithms': {
-                    'LSB': {
-                        'name': 'LSB隐写',
-                        'description': '音频LSB隐写算法',
+                    'AI': {
+                        'name': 'AI',
+                        'description': '大模型音频水印嵌入算法',
                         'implemented': True,
                         'priority': 1
                     },
@@ -176,15 +170,51 @@ FILE_TYPE_CONFIG = {
             'wav': {
                 'mime_type': 'audio/wav',
                 'algorithms': {
-                    'LSB': {
-                        'name': 'LSB隐写',
-                        'description': '音频LSB隐写算法',
+                    'AI': {
+                        'name': 'AI',
+                        'description': '大模型音频水印嵌入算法',
                         'implemented': True,
                         'priority': 1
                     }
                 },
-                'default_algorithm': 'LSB'
-            }
+                'default_algorithm': 'AI'
+            },
+            'flac': {
+                'mime_type': 'audio/flac',
+                'algorithms': {
+                    'AI': {
+                        'name': 'AI',
+                        'description': '大模型音频水印嵌入算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'AI'
+            },
+            'm4a': {
+                'mime_type': 'audio/m4a',
+                'algorithms': {
+                    'AI': {
+                        'name': 'AI',
+                        'description': '大模型音频水印嵌入算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'AI'
+            },
+            'aac': {
+                'mime_type': 'audio/aac',
+                'algorithms': {
+                    'AI': {
+                        'name': 'AI',
+                        'description': '大模型音频水印嵌入算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'AI'
+            },                        
         },
         'max_size': get_max_size_from_env('audio')
     },

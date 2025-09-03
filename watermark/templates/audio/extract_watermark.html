@@ -247,7 +247,7 @@
         {% if files %}
         <div class="file-list">
             {% for file in files %}
-            <div class="file-item" data-file-id="{{ file.id }}">
+            <div class="file-item" data-file-id="{{ file.id }}" data-filename="{{ file.filename }}">
                 <div class="file-info">
                     <label style="margin: 0; cursor: pointer;">
                         <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateSelectedCount()">
@@ -271,7 +271,7 @@
                     <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-success">
                         <i class="glyphicon glyphicon-download-alt"></i> 下载
                     </a>
-                    <button onclick="extractWatermark({{ file.id }}, '{{ file.filename }}')" class="btn btn-sm btn-info extract-button">
+                    <button type="button" class="btn btn-sm btn-info extract-button" data-file-id="{{ file.id }}">
                         <i class="glyphicon glyphicon-search"></i> 提取水印
                     </button>
                     <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此文件吗？');">
@@ -330,6 +330,14 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- 即时提取结果（AJAX 渲染） -->
+    <div class="main-section" id="clientResultsSection" style="display:none;">
+        <div class="result-list">
+            <h3 class="section-title"><i class="glyphicon glyphicon-flash"></i> 本次提取结果</h3>
+            <div id="clientResultList"></div>
+        </div>
+    </div>
 </div>
 
 {% block scripts %}
@@ -352,6 +360,10 @@
             });
             updateSelectedCount();
             showSelectedFilesInfo();
+        }
+        // 初始隐藏服务器端的“水印提取结果”区，待有客户端结果时再展示
+        if (typeof hideServerResultsSection === 'function') {
+            hideServerResultsSection();
         }
     };
 
@@ -399,182 +411,111 @@
         selectedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
     }
 
-    // 提取单个文件的水印
-    function extractWatermark(fileId, filename) {
-        fetch(`/audio/extract_from_file/${fileId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showAlert('error', data.error);
-                } else {
-                    showAlert('success', `成功提取水印！`);
-                    
-                    // 创建新的结果项
-                    var resultHtml = `
-                        <div class="result-item">
-                            <div class="result-header">
-                                <span class="result-filename">${filename}</span>
-                                <form method="POST" action="/clear_extract_result" style="display:inline;">
-                                    <input type="hidden" name="filename" value="${filename}">
-                                    <input type="hidden" name="file_type" value="audio">
-                                    <button type="submit" class="btn btn-danger btn-sm">
-                                        <i class="glyphicon glyphicon-remove"></i> 清除
-                                    </button>
-                                </form>
-                            </div>
-                            <div class="result-content">
-                                <strong>提取的水印：</strong>${data.extracted_text}
-                            </div>
-                        </div>
-                    `;
-
-                    // 获取或创建结果列表容器
-                    var resultList = document.querySelector('.result-list');
-                    if (!resultList) {
-                        var mainSection = document.createElement('div');
-                        mainSection.className = 'main-section';
-                        mainSection.innerHTML = `
-                            <div class="result-list">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <h3 class="section-title"><i class="glyphicon glyphicon-list-alt"></i> 水印提取结果</h3>
-                                    <form method="POST" action="/clear_all_extract_results" style="display:inline;">
-                                        <input type="hidden" name="file_type" value="audio">
-                                        <button type="submit" class="btn btn-warning btn-sm">
-                                            <i class="glyphicon glyphicon-trash"></i> 清除所有结果
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        `;
-                        document.querySelector('.watermark-container').appendChild(mainSection);
-                        resultList = mainSection.querySelector('.result-list');
-                    }
-
-                    // 添加新的结果项
-                    resultList.insertAdjacentHTML('beforeend', resultHtml);
-
-                    // 移除"暂无水印提取结果"的提示（如果存在）
-                    var emptyList = document.querySelector('.empty-list');
-                    if (emptyList) {
-                        emptyList.remove();
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('error', '提取水印时发生错误');
-            });
-    }
-
-    // 显示提示信息
-    function showAlert(type, message) {
-        // 移除已有的提示
-        var existingAlert = document.querySelector('.alert');
-        if (existingAlert) {
-            existingAlert.remove();
+    // 为选中文件提取水印
+    async function extractWatermarkFromSelected() {
+        if (selectedFiles.length === 0) {
+            alert('请先选择要提取水印的文件');
+            return;
         }
-
-        // 创建新的提示
-        var alertHtml = `
-            <div class="alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible" role="alert" style="margin-top: 20px;">
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                <i class="glyphicon glyphicon-${type === 'success' ? 'ok' : 'exclamation-sign'}"></i> ${message}
-            </div>
-        `;
-
-        // 插入提示到页面
-        var container = document.querySelector('.watermark-container');
-        container.insertAdjacentHTML('afterbegin', alertHtml);
-
-        // 3秒后自动关闭提示
-        setTimeout(() => {
-            var alert = document.querySelector('.alert');
-            if (alert) {
-                alert.remove();
+        const btn = document.getElementById('extractWatermarkBtn');
+        btn.disabled = true;
+        var start = Date.now();
+        if (window.AppLoading) AppLoading.show('正在提取水印，请稍候...');
+        try {
+            for (const id of selectedFiles) {
+                await extractOne(id, null, /*showLoading*/ false);
             }
-        }, 3000);
+        } finally {
+            btn.disabled = false;
+            if (window.AppLoading) AppLoading.hide();
+            var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            if (window.AppLoading) AppLoading.alertSuccess('批量提取完成，用时 ' + elapsed + ' 秒');
+        }
     }
 
-    // 提取选中文件的水印
-    function extractWatermarkFromSelected() {
-        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
-        var totalFiles = checkboxes.length;
-        var successCount = 0;
-        var errorCount = 0;
+    async function extractOne(id, el, showLoading) {
+        if (el) el.disabled = true;
+        var start = Date.now();
+        if (showLoading !== false && window.AppLoading) AppLoading.show('正在提取水印...');
+        try {
+            const resp = await fetch(`{{ url_for('audio_extract_from_file', file_id=0) }}?format=json`.replace('0', id));
+            const data = await resp.json();
+            const fileItem = document.querySelector(`.file-item[data-file-id="${id}"]`);
+            const filename = fileItem ? fileItem.getAttribute('data-filename') : `ID ${id}`;
+            renderClientResult(filename, data);
+            var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            if (window.AppLoading) AppLoading.alertSuccess('成功提取水印！用时 ' + elapsed + ' 秒');
+        } catch (e) {
+            renderClientResult(`ID ${id}` , { error: String(e) });
+            if (window.AppLoading) AppLoading.alertDanger('提取失败');
+        } finally {
+            if (el) el.disabled = false;
+            if (showLoading !== false && window.AppLoading) AppLoading.hide();
+        }
+    }
 
-        var promises = Array.from(checkboxes).map(checkbox => {
-            var fileId = checkbox.value;
-            var filename = checkbox.closest('.file-item').querySelector('.file-info span').textContent;
-            return fetch(`/audio/extract_from_file/${fileId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        errorCount++;
-                    } else {
-                        successCount++;
-                        // 创建新的结果项
-                        var resultHtml = `
-                            <div class="result-item">
-                                <div class="result-header">
-                                    <span class="result-filename">${filename}</span>
-                                    <form method="POST" action="/clear_extract_result" style="display:inline;">
-                                        <input type="hidden" name="filename" value="${filename}">
-                                        <input type="hidden" name="file_type" value="audio">
-                                        <button type="submit" class="btn btn-danger btn-sm">
-                                            <i class="glyphicon glyphicon-remove"></i> 清除
-                                        </button>
-                                    </form>
-                                </div>
-                                <div class="result-content">
-                                    <strong>提取的水印：</strong>${data.extracted_text}
-                                </div>
-                            </div>
-                        `;
+    function renderClientResult(filename, data) {
+        ensureClientResultsSection();
+        hideServerResultsSection();
+        const section = document.getElementById('clientResultsSection');
+        const list = document.getElementById('clientResultList');
+        section.style.display = '';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'result-item';
+        var content = (data && data.extracted_text)
+            ? ('<strong>提取的水印：</strong>' + data.extracted_text)
+            : ('<strong>错误：</strong>' + ((data && data.error) || '未知错误'));
+        wrapper.innerHTML = `
+            <div class="result-header">
+                <span class="result-filename">${filename}</span>
+            </div>
+            <div class="result-content">${content}</div>`;
+        list.prepend(wrapper);
+    }
 
-                        // 获取或创建结果列表容器
-                        var resultList = document.querySelector('.result-list');
-                        if (!resultList) {
-                            var mainSection = document.createElement('div');
-                            mainSection.className = 'main-section';
-                            mainSection.innerHTML = `
-                                <div class="result-list">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <h3 class="section-title"><i class="glyphicon glyphicon-list-alt"></i> 水印提取结果</h3>
-                                        <form method="POST" action="/clear_all_extract_results" style="display:inline;">
-                                            <input type="hidden" name="file_type" value="audio">
-                                            <button type="submit" class="btn btn-warning btn-sm">
-                                                <i class="glyphicon glyphicon-trash"></i> 清除所有结果
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            `;
-                            document.querySelector('.watermark-container').appendChild(mainSection);
-                            resultList = mainSection.querySelector('.result-list');
-                        }
+    function ensureClientResultsSection() {
+        var section = document.getElementById('clientResultsSection');
+        if (section) section.style.display = '';
+    }
 
-                        // 添加新的结果项
-                        resultList.insertAdjacentHTML('beforeend', resultHtml);
-                    }
-                });
+    function hideServerResultsSection() {
+        var containers = document.querySelectorAll('.main-section');
+        containers.forEach(function(sec) {
+            if (sec.id === 'clientResultsSection') return;
+            var title = sec.querySelector('.section-title');
+            if (title && title.textContent.indexOf('水印提取结果') > -1) {
+                sec.style.display = 'none';
+            }
         });
-
-        Promise.all(promises)
-            .then(() => {
-                // 显示批量处理结果
-                if (successCount > 0) {
-                    showAlert('success', `成功提取 ${successCount} 个文件的水印！${errorCount > 0 ? `（${errorCount} 个文件失败）` : ''}`);
-                } else if (errorCount > 0) {
-                    showAlert('error', `提取失败：${errorCount} 个文件处理失败`);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('error', '批量提取水印时发生错误');
-            });
     }
+
+    // 添加键盘快捷键支持
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+A 全选
+        if (e.ctrlKey && e.key === 'a') {
+            e.preventDefault();
+            var selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                selectAll.checked = !selectAll.checked;
+                toggleSelectAll();
+            }
+        }
+    });
+
+    // 事件委托，绑定每条记录上的“提取水印”按钮，避免内联表达式冲突
+    document.addEventListener('click', function(e) {
+        var target = e.target;
+        if (target && target.closest && target.closest('.extract-button')) {
+            var btn = target.closest('.extract-button');
+            var idAttr = btn.getAttribute('data-file-id');
+            if (idAttr) {
+                var id = parseInt(idAttr, 10);
+                if (!isNaN(id)) {
+                    extractOne(id, btn, true);
+                }
+            }
+        }
+    });
 </script>
 {% endblock %}
 {% endblock %}

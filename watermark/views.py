@@ -3,7 +3,7 @@ import hashlib
 import mimetypes
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Third-party imports
 from flask import (
@@ -177,7 +177,109 @@ def get_user_files(user, file_type, has_watermark=None):
 #主页
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    return render_template('index.html')
+    # 全局统计
+    total_files = File.query.count()
+    total_size = db.session.query(db.func.coalesce(db.func.sum(File.file_size), 0)).scalar()
+    total_size_value = int(total_size or 0)
+    total_size_str = format_file_size(total_size_value)
+
+    types = ['image', 'audio', 'video', 'text']
+    type_counts = {t: File.query.filter_by(file_type=t).count() for t in types}
+    type_labels = ['图片', '音频', '视频', '文档']
+    type_values = [type_counts[t] for t in types]
+
+    watermarked_count = File.query.filter_by(has_watermark=True).count()
+    non_watermarked_count = total_files - watermarked_count
+
+    recent_files = File.query.order_by(File.created_at.desc()).limit(5).all()
+
+    # 最近14天按天统计
+    days = 14
+    start_date = datetime.utcnow() - timedelta(days=days - 1)
+    grouped = (
+        db.session.query(db.func.date(File.created_at).label('d'), db.func.count(File.id))
+        .filter(File.created_at >= start_date)
+        .group_by(db.func.date(File.created_at))
+        .all()
+    )
+    count_map = {str(d): c for d, c in grouped}
+    timeseries_labels = []
+    timeseries_counts = []
+    for i in range(days):
+        day = (start_date + timedelta(days=i))
+        key = str(day.date())
+        timeseries_labels.append(day.strftime('%m-%d'))
+        timeseries_counts.append(int(count_map.get(key, 0)))
+
+    # 如果已登录，提供个人统计与个人可视化数据
+    user_stats = None
+    user_recent_files = []
+    user_type_labels = []
+    user_type_values = []
+    user_timeseries_labels = []
+    user_timeseries_counts = []
+    if current_user.is_authenticated:
+        user_total = File.query.filter_by(uploader_id=current_user.id).count()
+        user_watermarked = File.query.filter_by(uploader_id=current_user.id, has_watermark=True).count()
+        user_size = db.session.query(db.func.coalesce(db.func.sum(File.file_size), 0)).filter(File.uploader_id == current_user.id).scalar()
+        user_size_value = int(user_size or 0)
+        user_stats = {
+            'total': user_total,
+            'watermarked': user_watermarked,
+            'non_watermarked': user_total - user_watermarked,
+            'total_size_str': format_file_size(user_size_value)
+        }
+
+        # 最近文件（仅本人）
+        user_recent_files = (
+            File.query.filter_by(uploader_id=current_user.id)
+            .order_by(File.created_at.desc())
+            .limit(5)
+            .all()
+        )
+
+        # 类型分布（仅本人）
+        user_types = ['image', 'audio', 'video', 'text']
+        user_type_labels = ['图片', '音频', '视频', '文档']
+        user_type_values = [
+            File.query.filter_by(uploader_id=current_user.id, file_type=t).count()
+            for t in user_types
+        ]
+
+        # 最近14天上传趋势（仅本人）
+        u_grouped = (
+            db.session.query(db.func.date(File.created_at).label('d'), db.func.count(File.id))
+            .filter(File.uploader_id == current_user.id, File.created_at >= start_date)
+            .group_by(db.func.date(File.created_at))
+            .all()
+        )
+        u_count_map = {str(d): c for d, c in u_grouped}
+        for i in range(days):
+            dday = (start_date + timedelta(days=i))
+            ukey = str(dday.date())
+            user_timeseries_labels.append(dday.strftime('%m-%d'))
+            user_timeseries_counts.append(int(u_count_map.get(ukey, 0)))
+
+    return render_template(
+        'index.html',
+        total_files=total_files,
+        total_size_str=total_size_str,
+        watermarked_count=watermarked_count,
+        non_watermarked_count=non_watermarked_count,
+        type_counts=type_counts,
+        recent_files=recent_files,
+        user_stats=user_stats,
+        format_file_size=format_file_size,
+        timeseries_labels=timeseries_labels,
+        timeseries_counts=timeseries_counts,
+        user_recent_files=user_recent_files,
+        user_type_labels=user_type_labels,
+        user_type_values=user_type_values,
+        user_timeseries_labels=user_timeseries_labels,
+        user_timeseries_counts=user_timeseries_counts
+        , type_labels=type_labels
+        , type_values=type_values
+    )
 
 #注册
 @app.route('/register.html', methods=['GET', 'POST'])
