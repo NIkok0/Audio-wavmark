@@ -240,6 +240,7 @@ def embed_doc_space(input_file, watermark):
 def extract_doc_space(input_file):
     """DOC格式专用"""
     import win32com.client
+    import pythoncom
     import os
     def extract_watermark_from_char_spacing(doc_path, length=6):
         """
@@ -252,6 +253,7 @@ def extract_doc_space(input_file):
         """
         # 1. 转为绝对路径，打开 Word 文档
         doc_path = os.path.abspath(doc_path)
+        pythoncom.CoInitialize()
         word = win32com.client.Dispatch("Word.Application")
         word.Visible = False
         doc = word.Documents.Open(doc_path)
@@ -291,8 +293,8 @@ def extract_doc_space(input_file):
 
 
 def embed_docx_space(input_file, watermark):
-    """DOCX格式专用"""
-    import win32com.client
+    """DOCX格式专用 - 使用python-docx库"""
+    from docx import Document
     import os
 
     original_name = os.path.basename(input_file)
@@ -303,113 +305,93 @@ def embed_docx_space(input_file, watermark):
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
     full_path = os.path.join(embed_dir, filename)
 
-    # 保存文件
-    def embed_watermark_in_char_spacing(doc_path, output_path, watermark_text):
-        """
-        将 watermark_text 以二进制形式嵌入到 doc 文档中：
-          - 把每个字符的 Font.Spacing 设置为 0 或 1，分别表示二进制 0/1。
-          - 如果文档中字符数量不够，则自动在末尾插入空格补齐。
-        参数：
-          doc_path       - 源 .doc/.docx 文档路径
-          output_path    - 嵌入后保存的文档路径
-          watermark_text - 要隐藏的字符串（水印内容）
-        """
-        # 1. 转为绝对路径
-        doc_path = os.path.abspath(doc_path)
-        output_path = os.path.abspath(output_path)
+    def watermark_to_zwc(watermark):
+        """将字符串水印编码为零宽字符序列（二进制编码）"""
+        utf8_bytes = watermark.encode('utf-8')
+        binary = ''.join(format(byte, '08b') for byte in utf8_bytes)
+        return ''.join('\u200B' if bit == '0' else '\u200D' for bit in binary)
 
-        # 2. 把 watermark_text 转为二进制序列（每字符 8 位）
-        binary_data = ''.join(format(ord(c), '08b') for c in watermark_text)
-        total_needed = len(binary_data)  # 需要嵌入的位数
-
-        # 3. 启动 Word 后台打开文档
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
-        doc = word.Documents.Open(doc_path)
-
-        # 4. 拿到整个文档的字符集合
-        # full_range = doc.Range(0, 0).GoTo(What=win32com.client.constants.wdGoToLine, Which=win32com.client.constants.wdGoToLast)
-        # 事实上 doc.Range() 就可以代表全文，只是下面我们直接从 doc.Range().Characters 获取
-        chars = doc.Range().Characters
-        total_chars = chars.Count
-
-        # 5. 如果字符不足，就在文档尾部插入空格以补齐
-        if total_needed > total_chars:
-            extra_needed = total_needed - total_chars
-            # 在文档末尾插入 extra_needed 个空格，使得 Characters.Count 增加
-            doc.Content.InsertAfter(" " * extra_needed)
-            # 重新获取 Characters 集合
-            chars = doc.Range().Characters
-            total_chars = chars.Count
-
-        # 6. 遍历二进制位，把前 total_needed 个字符的 Font.Spacing 设置为 0/1
-        #    注意：Characters 集合是 1-based，下标 i+1 对应二进制的第 i 位
-        for i, bit in enumerate(binary_data):
-            char_range = chars(i + 1)  # 第 i+1 个字符
-            if bit == '0':
-                char_range.Font.Spacing = 0  # 二进制 0 → 间距 0 pt
+    def embed_watermark_in_docx(doc_path, output_path, watermark_text):
+        """在DOCX文档中嵌入零宽字符水印"""
+        doc = Document(doc_path)
+        zwc = watermark_to_zwc(watermark_text)
+        
+        # 在第一个段落末尾添加零宽字符水印
+        if doc.paragraphs:
+            first_paragraph = doc.paragraphs[0]
+            if first_paragraph.runs:
+                first_paragraph.runs[-1].text += zwc
             else:
-                char_range.Font.Spacing = 1  # 二进制 1 → 间距 1 pt
-
-        # 7. 保存并退出
-        doc.SaveAs(output_path)
-        doc.Close()
-        word.Quit()
+                first_paragraph.add_run(zwc)
+        else:
+            # 如果没有段落，创建一个新段落
+            p = doc.add_paragraph()
+            p.add_run(zwc)
+        
+        doc.save(output_path)
+        print(f"水印已嵌入DOCX文档: {output_path}")
         return output_path
 
-    return embed_watermark_in_char_spacing(input_file,full_path, watermark)
+    return embed_watermark_in_docx(input_file, full_path, watermark)
 
 def extract_docx_space(input_file):
-    """DOCX格式专用"""
-    import win32com.client
+    """DOCX格式专用 - 使用python-docx库提取零宽字符水印"""
+    from docx import Document
     import os
-    def extract_watermark_from_char_spacing(doc_path, length=6):
-        """
-        从之前用 embed_watermark_in_char_spacing 嵌入的数据中提取水印。
-        参数：
-          doc_path - 含隐藏水印的文档路径
-          length   - 原始水印的字符长度（例如 "own" → length=3；“owner”→ length=5）
-        返回：
-          提取出的原始字符串
-        """
-        # 1. 转为绝对路径，打开 Word 文档
-        doc_path = os.path.abspath(doc_path)
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
-        doc = word.Documents.Open(doc_path)
 
-        # 2. 需要读取的二进制总位数 = length * 8
-        bits_needed = length * 8
-        chars = doc.Range().Characters
+    def zwc_to_watermark(zwc_text):
+        """从零宽字符序列中提取水印"""
+        binary = ''
+        for c in zwc_text:
+            if c == '\u200B':
+                binary += '0'
+            elif c == '\u200D':
+                binary += '1'
+        
+        # 确保二进制长度是8的倍数
+        if len(binary) % 8 != 0:
+            binary = binary[:-(len(binary) % 8)] if len(binary) >= 8 else ''
+        
+        if not binary:
+            return None
+            
+        try:
+            # 将二进制转换为字节，然后用UTF-8解码
+            bytes_data = []
+            for i in range(0, len(binary), 8):
+                byte_val = int(binary[i:i + 8], 2)
+                bytes_data.append(byte_val)
+            
+            return bytes(bytes_data).decode('utf-8')
+        except (ValueError, UnicodeDecodeError):
+            return None
 
-        # 3. 如果字符数量小于 bits_needed，说明读取不完整，可以抛错或提示
-        if bits_needed > chars.Count:
-            doc.Close()
-            word.Quit()
-            raise ValueError(f"文档字符数 ({chars.Count}) 少于水印读取需要的位数 ({bits_needed})，无法提取完整水印。")
+    def extract_watermark_from_docx(doc_path):
+        """从DOCX文档中提取零宽字符水印"""
+        try:
+            doc = Document(doc_path)
+        except Exception as e:
+            raise ValueError(f"无法读取DOCX文件 {doc_path}: {str(e)}")
 
-        # 4. 逐位读取字符的 Font.Spacing 属性，Build 二进制串
-        binary = []
-        for i in range(bits_needed):
-            char_range = chars(i + 1)  # 第 i+1 个字符
-            spacing = char_range.Font.Spacing
-            # 如果 spacing 大于 0（我们嵌入时一律设为 1），则视为 '1'，否则 '0'
-            bit = '1' if spacing and spacing > 0 else '0'
-            binary.append(bit)
-        binary_str = ''.join(binary)
-
-        # 5. 将二进制按照每 8 位拆分并转为字符
-        chars_out = []
-        for i in range(0, len(binary_str), 8):
-            byte = binary_str[i:i + 8]
-            chars_out.append(chr(int(byte, 2)))
-        watermark = ''.join(chars_out)
-
-        doc.Close()
-        word.Quit()
-        print(f"🔍 提取出的水印: {watermark}")
+        # 从所有段落和运行中查找零宽字符
+        zwc_chars = ''
+        for paragraph in doc.paragraphs:
+            for run in paragraph.runs:
+                if run.text:
+                    zwc_chars += ''.join(c for c in run.text if c in ('\u200B', '\u200D'))
+        
+        if not zwc_chars:
+            raise ValueError("DOCX文件中未找到零宽字符水印")
+            
+        watermark = zwc_to_watermark(zwc_chars)
+        
+        if not watermark:
+            raise ValueError("零宽字符解码失败，可能不是有效的水印")
+            
         return watermark
-    return extract_watermark_from_char_spacing(input_file, 6)
+
+    print("text_watermark_extract for DOCX!")
+    return extract_watermark_from_docx(input_file)
 
 def embed_xml_space(input_file, watermark):
     """XML格式专用"""
