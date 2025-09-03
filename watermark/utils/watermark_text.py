@@ -8,6 +8,13 @@ from flask import current_app
 def embed(input_file, watermark, algorithm):
     """文本水印嵌入 - 负责算法调用和文件保存"""
     
+    # 输入验证
+    if not watermark or not watermark.strip():
+        raise ValueError("水印内容不能为空")
+    
+    if len(watermark) > 10:
+        raise ValueError("水印内容不能超过10个字符")
+    
     # 获取文件扩展名
     _, extension = os.path.splitext(input_file)
     extension = extension[1:].lower()
@@ -40,8 +47,9 @@ def embed(input_file, watermark, algorithm):
         return full_path  # 返回完整路径
         
     except Exception as e:
-        print(f"文本水印算法 {algorithm} 失败: {str(e)}")
-        raise
+        error_msg = f"文本水印算法 {algorithm} 失败: {str(e)}"
+        print(error_msg)
+        raise ValueError(error_msg) from e
 
 def extract(input_file, algorithm):
     """文本水印提取 - 支持多种算法（基于配置）"""
@@ -61,8 +69,9 @@ def extract(input_file, algorithm):
         return extract_function(input_file)
         
     except Exception as e:
-        print(f"文本水印提取算法 {algorithm} 失败: {str(e)}")
-        raise
+        error_msg = f"文本水印提取算法 {algorithm} 失败: {str(e)}"
+        print(error_msg)
+        raise ValueError(error_msg) from e
 
 # TXT格式
 def embed_txt_zbit(input_file, watermark):
@@ -70,7 +79,9 @@ def embed_txt_zbit(input_file, watermark):
 
     def watermark_to_zwc(watermark):
         """将字符串水印编码为零宽字符序列（二进制编码）"""
-        binary = ''.join(format(ord(c), '08b') for c in watermark)
+        # 对于中文字符，需要用UTF-8编码而不是直接用ord()
+        utf8_bytes = watermark.encode('utf-8')
+        binary = ''.join(format(byte, '08b') for byte in utf8_bytes)
         return ''.join('\u200B' if bit == '0' else '\u200D' for bit in binary)
 
     def embed_watermark(input_path, watermark):
@@ -111,17 +122,46 @@ def extract_txt_zbit(input_file):
                 binary += '0'
             elif c == '\u200D':
                 binary += '1'
-        chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
-        return ''.join(chars)
+        
+        # 确保二进制长度是8的倍数
+        if len(binary) % 8 != 0:
+            # 截断到最近的8的倍数
+            binary = binary[:-(len(binary) % 8)] if len(binary) >= 8 else ''
+        
+        if not binary:
+            return None
+            
+        try:
+            # 将二进制转换为字节，然后用UTF-8解码
+            bytes_data = []
+            for i in range(0, len(binary), 8):
+                byte_val = int(binary[i:i + 8], 2)
+                bytes_data.append(byte_val)
+            
+            # 用UTF-8解码字节序列
+            return bytes(bytes_data).decode('utf-8')
+        except (ValueError, UnicodeDecodeError):
+            return None
 
     def extract_watermark(path):
         """从txt中提取水印（零宽字符）"""
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            raise ValueError(f"无法读取文件 {path}: {str(e)}")
 
         # 提取所有零宽字符
         zwc_chars = ''.join(c for c in content if c in ('\u200B', '\u200D'))
+        
+        if not zwc_chars:
+            raise ValueError("文件中未找到零宽字符水印")
+            
         watermark = zwc_to_watermark(zwc_chars)
+        
+        if not watermark:
+            raise ValueError("零宽字符解码失败，可能不是有效的水印")
+            
         return watermark
 
     print("text_watermark_extract for TXT!")
@@ -257,7 +297,7 @@ def embed_docx_space(input_file, watermark):
 
     original_name = os.path.basename(input_file)
     name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'doc'}"
+    filename = f"{name_without_ext}_embed.{'docx'}"
 
     # 从app.config获取保存路径
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
@@ -411,8 +451,25 @@ def extract_xml_space(input_file):
     import xml.etree.ElementTree as ET
     def zwc_to_watermark(zwc_text):
         binary = ''.join('0' if c == '\u200B' else '1' for c in zwc_text if c in ('\u200B', '\u200D'))
-        chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
-        return ''.join(chars)
+        
+        # 确保二进制长度是8的倍数
+        if len(binary) % 8 != 0:
+            binary = binary[:-(len(binary) % 8)] if len(binary) >= 8 else ''
+        
+        if not binary:
+            return None
+            
+        try:
+            # 将二进制转换为字节，然后用UTF-8解码
+            bytes_data = []
+            for i in range(0, len(binary), 8):
+                byte_val = int(binary[i:i + 8], 2)
+                bytes_data.append(byte_val)
+            
+            # 用UTF-8解码字节序列
+            return bytes(bytes_data).decode('utf-8')
+        except (ValueError, UnicodeDecodeError):
+            return None
 
     def extract_watermark_from_xml(path):
         tree = ET.parse(path)
@@ -513,7 +570,9 @@ def embed_md_zbit(input_file, watermark):
 
     def watermark_to_zwc(watermark):
         """将字符串水印编码为零宽字符序列（二进制编码）"""
-        binary = ''.join(format(ord(c), '08b') for c in watermark)
+        # 对于中文字符，需要用UTF-8编码而不是直接用ord()
+        utf8_bytes = watermark.encode('utf-8')
+        binary = ''.join(format(byte, '08b') for byte in utf8_bytes)
         return ''.join('\u200B' if bit == '0' else '\u200D' for bit in binary)
     def embed_watermark(input_path, output_path, watermark):
         """在txt中嵌入不可见水印"""
@@ -544,8 +603,25 @@ def extract_md_zbit(input_file):
                 binary += '0'
             elif c == '\u200D':
                 binary += '1'
-        chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
-        return ''.join(chars)
+        
+        # 确保二进制长度是8的倍数
+        if len(binary) % 8 != 0:
+            binary = binary[:-(len(binary) % 8)] if len(binary) >= 8 else ''
+        
+        if not binary:
+            return None
+            
+        try:
+            # 将二进制转换为字节，然后用UTF-8解码
+            bytes_data = []
+            for i in range(0, len(binary), 8):
+                byte_val = int(binary[i:i + 8], 2)
+                bytes_data.append(byte_val)
+            
+            # 用UTF-8解码字节序列
+            return bytes(bytes_data).decode('utf-8')
+        except (ValueError, UnicodeDecodeError):
+            return None
     def extract_watermark(path):
         """从txt中提取水印（零宽字符）"""
         with open(path, 'r', encoding='utf-8') as f:
@@ -570,14 +646,16 @@ def embed_sql_zbit(input_file, watermark):
     """SQL格式专用"""
     original_name = os.path.basename(input_file)
     name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'md'}"
+    filename = f"{name_without_ext}_embed.{'sql'}"
 
     # 从app.config获取保存路径
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
     full_path = os.path.join(embed_dir, filename)
 
     def watermark_to_zwc(watermark):
-        binary = ''.join(format(ord(c), '08b') for c in watermark)
+        # 对于中文字符，需要用UTF-8编码而不是直接用ord()
+        utf8_bytes = watermark.encode('utf-8')
+        binary = ''.join(format(byte, '08b') for byte in utf8_bytes)
         return ''.join('\u200B' if bit == '0' else '\u200D' for bit in binary)
 
     def embed_watermark(input_path, output_path, watermark):
@@ -632,8 +710,19 @@ def extract_sql_zbit(input_file):
     import re
     def zwc_to_watermark(zwc_text):
         binary = ''.join('0' if c == '\u200B' else '1' for c in zwc_text if c in ('\u200B', '\u200D'))
-        chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
-        return ''.join(chars)
+        
+        # 确保二进制长度是8的倍数
+        if len(binary) % 8 != 0:
+            binary = binary[:-(len(binary) % 8)] if len(binary) >= 8 else ''
+        
+        if not binary:
+            return None
+            
+        try:
+            chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
+            return ''.join(chars)
+        except ValueError:
+            return None
 
     def extract_watermark(path):
         with open(path, 'r', encoding='utf-8') as f:
@@ -671,7 +760,7 @@ def embed_csv_zbit(input_file, watermark):
     from collections import Counter
     original_name = os.path.basename(input_file)
     name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'md'}"
+    filename = f"{name_without_ext}_embed.{'csv'}"
 
     # 从app.config获取保存路径
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
@@ -717,9 +806,15 @@ def extract_csv_zbit(input_file):
                     continue  # 跳过标题行
                 if column < len(row):
                     field = row[column]
-                    # 仅提取末尾的空白字符
-                    tail_ws = ''.join(c for c in reversed(field) if c in (' ', '\t'))
-                    ws_segments.append(tail_ws[::-1])  # 反转回原顺序
+                    # 从字段末尾提取连续的空白字符
+                    tail_ws = ''
+                    for c in reversed(field):
+                        if c in (' ', '\t'):
+                            tail_ws = c + tail_ws  # 保持正确顺序
+                        else:
+                            break  # 遇到非空白字符就停止
+                    if tail_ws:
+                        ws_segments.append(tail_ws)
 
         decoded = [ws_to_watermark(ws, watermark_length_chars) for ws in ws_segments if ws]
         decoded = [d for d in decoded if d is not None]
@@ -732,7 +827,15 @@ def extract_csv_zbit(input_file):
         return most_common[0][0]
 
     print("text_watermark_extract for CSV!")
-    return extract_ws_watermark_from_csv(input_file, watermark_length_chars=7)
+    # 尝试不同的水印长度，从1-10个字符
+    for length in range(1, 11):
+        try:
+            result = extract_ws_watermark_from_csv(input_file, watermark_length_chars=length)
+            if result and result.strip():  # 如果提取到有效内容
+                return result
+        except Exception:
+            continue
+    return extract_ws_watermark_from_csv(input_file, watermark_length_chars=7)  # 默认回退
 
 
 
@@ -748,7 +851,7 @@ def embed_xlsx_ns(input_file, watermark):
     from openpyxl.utils import get_column_letter
     original_name = os.path.basename(input_file)
     name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'md'}"
+    filename = f"{name_without_ext}_embed.{'xlsx'}"
 
     # 从app.config获取保存路径
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
@@ -806,7 +909,7 @@ def embed_xls_ns(input_file, watermark):
     from xlwt import XFStyle, Font
     original_name = os.path.basename(input_file)
     name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'md'}"
+    filename = f"{name_without_ext}_embed.{'xls'}"
 
     # 从app.config获取保存路径
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']

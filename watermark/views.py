@@ -458,7 +458,8 @@ def clear_extract_result():
     if not filename or not file_type:
         return redirect(request.referrer)
     
-    session_key = f'{file_type}_extracted_files'
+    # 使用统一的session键名
+    session_key = 'extracted_watermarks'
     extracted_files = session.get(session_key, {})
     if filename in extracted_files:
         del extracted_files[filename]
@@ -474,7 +475,8 @@ def clear_all_extract_results():
     if not file_type:
         return redirect(request.referrer)
     
-    session_key = f'{file_type}_extracted_files'
+    # 使用统一的session键名
+    session_key = 'extracted_watermarks'
     session[session_key] = {}
     
     return redirect(request.referrer)

@@ -291,7 +291,7 @@
     </div>
 
     <!-- 显示提取结果 -->
-    {% if extracted_files %}
+    {% if extracted_watermarks %}
     <div class="main-section">
         <div class="result-list">
             <div class="d-flex justify-content-between align-items-center">
@@ -303,7 +303,7 @@
                     </button>
                 </form>
             </div>
-            {% for filename, result in extracted_files.items() %}
+            {% for filename, result in extracted_watermarks.items() %}
             <div class="result-item">
                 <div class="result-header">
                     <span class="result-filename">{{ filename }}</span>
@@ -334,7 +334,14 @@
     <!-- 即时提取结果（AJAX 渲染） -->
     <div class="main-section" id="clientResultsSection" style="display:none;">
         <div class="result-list">
-            <h3 class="section-title"><i class="glyphicon glyphicon-flash"></i> 本次提取结果</h3>
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="section-title"><i class="glyphicon glyphicon-flash"></i> 本次提取结果</h3>
+                <div id="clearAllClientResultsContainer" style="display:none;">
+                    <button type="button" class="btn btn-warning btn-sm" onclick="clearAllClientResults()">
+                        <i class="glyphicon glyphicon-trash"></i> 清除所有结果
+                    </button>
+                </div>
+            </div>
             <div id="clientResultList"></div>
         </div>
     </div>
@@ -434,7 +441,17 @@
     }
 
     async function extractOne(id, el, showLoading) {
-        if (el) el.disabled = true;
+        // 防止重复执行：检查是否已经在处理中
+        if (el && el.dataset.processing === 'true') {
+            console.log('正在处理中，忽略重复请求');
+            return;
+        }
+        
+        if (el) {
+            el.disabled = true;
+            el.dataset.processing = 'true'; // 标记为处理中
+        }
+        
         var start = Date.now();
         if (showLoading !== false && window.AppLoading) AppLoading.show('正在提取水印...');
         try {
@@ -449,7 +466,10 @@
             renderClientResult(`ID ${id}` , { error: String(e) });
             if (window.AppLoading) AppLoading.alertDanger('提取失败');
         } finally {
-            if (el) el.disabled = false;
+            if (el) {
+                el.disabled = false;
+                el.dataset.processing = 'false'; // 清除处理状态
+            }
             if (showLoading !== false && window.AppLoading) AppLoading.hide();
         }
     }
@@ -465,12 +485,23 @@
         var content = (data && data.extracted_text)
             ? ('<strong>提取的水印：</strong>' + data.extracted_text)
             : ('<strong>错误：</strong>' + ((data && data.error) || '未知错误'));
+        
+        // 为每个结果项生成唯一ID
+        var resultId = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        wrapper.id = resultId;
+        
         wrapper.innerHTML = `
             <div class="result-header">
                 <span class="result-filename">${filename}</span>
+                <button type="button" class="btn btn-danger btn-sm" onclick="clearClientResult('${resultId}')">
+                    <i class="glyphicon glyphicon-remove"></i> 清除
+                </button>
             </div>
             <div class="result-content">${content}</div>`;
         list.prepend(wrapper);
+        
+        // 添加清除所有结果按钮（如果还没有的话）
+        addClearAllClientResultsButton();
     }
 
     function ensureClientResultsSection() {
@@ -489,6 +520,53 @@
         });
     }
 
+    // 清除单个客户端结果
+    function clearClientResult(resultId) {
+        var resultElement = document.getElementById(resultId);
+        if (resultElement) {
+            resultElement.style.opacity = '0';
+            setTimeout(function() {
+                resultElement.remove();
+                
+                // 检查是否还有其他结果，如果没有则隐藏整个区域
+                var list = document.getElementById('clientResultList');
+                if (list && list.children.length === 0) {
+                    document.getElementById('clientResultsSection').style.display = 'none';
+                    document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                }
+            }, 300);
+        }
+    }
+
+    // 清除所有客户端结果
+    function clearAllClientResults() {
+        if (!confirm('确定要清除所有本次提取结果吗？')) {
+            return;
+        }
+        
+        var list = document.getElementById('clientResultList');
+        if (list) {
+            // 淡出动画
+            list.style.opacity = '0';
+            setTimeout(function() {
+                list.innerHTML = '';
+                document.getElementById('clientResultsSection').style.display = 'none';
+                document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                list.style.opacity = '1'; // 重置透明度
+            }, 300);
+        }
+    }
+
+    // 添加清除所有结果按钮
+    function addClearAllClientResultsButton() {
+        var container = document.getElementById('clearAllClientResultsContainer');
+        var list = document.getElementById('clientResultList');
+        
+        if (container && list && list.children.length > 0) {
+            container.style.display = 'block';
+        }
+    }
+
     // 添加键盘快捷键支持
     document.addEventListener('keydown', function(e) {
         // Ctrl+A 全选
@@ -502,11 +580,20 @@
         }
     });
 
-    // 事件委托，绑定每条记录上的“提取水印”按钮，避免内联表达式冲突
+    // 事件委托，绑定每条记录上的"提取水印"按钮，避免内联表达式冲突
     document.addEventListener('click', function(e) {
         var target = e.target;
         if (target && target.closest && target.closest('.extract-button')) {
+            e.preventDefault(); // 阻止默认行为
+            e.stopPropagation(); // 阻止事件冒泡
+            
             var btn = target.closest('.extract-button');
+            
+            // 防止重复点击：如果按钮已禁用，直接返回
+            if (btn.disabled) {
+                return;
+            }
+            
             var idAttr = btn.getAttribute('data-file-id');
             if (idAttr) {
                 var id = parseInt(idAttr, 10);

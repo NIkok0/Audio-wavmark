@@ -291,7 +291,7 @@
     </div>
 
     <!-- 显示提取结果 -->
-    {% if extracted_files %}
+    {% if extracted_watermarks %}
     <div class="main-section">
         <div class="result-list">
             <div class="d-flex justify-content-between align-items-center">
@@ -303,7 +303,7 @@
                     </button>
                 </form>
             </div>
-            {% for filename, result in extracted_files.items() %}
+            {% for filename, result in extracted_watermarks.items() %}
             <div class="result-item">
                 <div class="result-header">
                     <span class="result-filename">{{ filename }}</span>
@@ -404,7 +404,18 @@
     }
 
     // 提取单个文件的水印
-    function extractWatermark(fileId) {
+    function extractWatermark(fileId, btn) {
+        // 防止重复执行：检查是否已经在处理中
+        if (btn && btn.dataset.processing === 'true') {
+            console.log('正在处理中，忽略重复请求');
+            return;
+        }
+        
+        if (btn) {
+            btn.disabled = true;
+            btn.dataset.processing = 'true'; // 标记为处理中
+        }
+        
         var start = Date.now();
         if (window.AppLoading) AppLoading.show('正在提取水印，请稍候...');
         fetch(`/video/extract_from_file/${fileId}`)
@@ -425,6 +436,10 @@
                 showAlert('error', '提取失败');
             })
             .finally(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.dataset.processing = 'false'; // 清除处理状态
+                }
                 if (window.AppLoading) AppLoading.hide();
             });
     }
@@ -435,7 +450,7 @@
             var mainSection = document.createElement('div');
             mainSection.className = 'main-section';
             mainSection.id = 'clientResultsSection';
-            mainSection.innerHTML = '<div class="result-list"><h3 class="section-title"><i class="glyphicon glyphicon-flash"></i> 本次提取结果</h3><div id="clientResultList"></div></div>';
+            mainSection.innerHTML = '<div class="result-list"><div class="d-flex justify-content-between align-items-center"><h3 class="section-title"><i class="glyphicon glyphicon-flash"></i> 本次提取结果</h3><div id="clearAllClientResultsContainer" style="display:none;"><button type="button" class="btn btn-warning btn-sm" onclick="clearAllClientResults()"><i class="glyphicon glyphicon-trash"></i> 清除所有结果</button></div></div><div id="clientResultList"></div></div>';
             document.querySelector('.watermark-container').appendChild(mainSection);
             section = mainSection;
         }
@@ -463,21 +478,40 @@
         var content = (data && data.extracted_text)
             ? ('<strong>提取的水印：</strong>' + data.extracted_text)
             : ('<strong>错误：</strong>' + ((data && data.error) || '未知错误'));
-        wrapper.innerHTML = '<div class="result-header"><span class="result-filename">' + filename + '</span></div>' +
+        
+        // 为每个结果项生成唯一ID
+        var resultId = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        wrapper.id = resultId;
+        
+        wrapper.innerHTML = '<div class="result-header"><span class="result-filename">' + filename + '</span>' +
+            '<button type="button" class="btn btn-danger btn-sm" onclick="clearClientResult(\'' + resultId + '\')">' +
+            '<i class="glyphicon glyphicon-remove"></i> 清除</button></div>' +
             '<div class="result-content">' + content + '</div>';
         list.prepend(wrapper);
+        
+        // 添加清除所有结果按钮（如果还没有的话）
+        addClearAllClientResultsButton();
     }
 
     // 事件委托，避免内联表达式导致的语法检查问题
     document.addEventListener('click', function(e) {
         var target = e.target;
         if (target && target.closest && target.closest('.extract-button')) {
+            e.preventDefault(); // 阻止默认行为
+            e.stopPropagation(); // 阻止事件冒泡
+            
             var btn = target.closest('.extract-button');
+            
+            // 防止重复点击：如果按钮已禁用，直接返回
+            if (btn.disabled) {
+                return;
+            }
+            
             var idAttr = btn.getAttribute('data-file-id');
             if (idAttr) {
                 var id = parseInt(idAttr, 10);
                 if (!isNaN(id)) {
-                    extractWatermark(id);
+                    extractWatermark(id, btn);
                 }
             }
         }
@@ -512,6 +546,53 @@
                 alert.remove();
             }
         }, 3000);
+    }
+
+    // 清除单个客户端结果
+    function clearClientResult(resultId) {
+        var resultElement = document.getElementById(resultId);
+        if (resultElement) {
+            resultElement.style.opacity = '0';
+            setTimeout(function() {
+                resultElement.remove();
+                
+                // 检查是否还有其他结果，如果没有则隐藏整个区域
+                var list = document.getElementById('clientResultList');
+                if (list && list.children.length === 0) {
+                    document.getElementById('clientResultsSection').style.display = 'none';
+                    document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                }
+            }, 300);
+        }
+    }
+
+    // 清除所有客户端结果
+    function clearAllClientResults() {
+        if (!confirm('确定要清除所有本次提取结果吗？')) {
+            return;
+        }
+        
+        var list = document.getElementById('clientResultList');
+        if (list) {
+            // 淡出动画
+            list.style.opacity = '0';
+            setTimeout(function() {
+                list.innerHTML = '';
+                document.getElementById('clientResultsSection').style.display = 'none';
+                document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                list.style.opacity = '1'; // 重置透明度
+            }, 300);
+        }
+    }
+
+    // 添加清除所有结果按钮
+    function addClearAllClientResultsButton() {
+        var container = document.getElementById('clearAllClientResultsContainer');
+        var list = document.getElementById('clientResultList');
+        
+        if (container && list && list.children.length > 0) {
+            container.style.display = 'block';
+        }
     }
 
     // 提取选中文件的水印

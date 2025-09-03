@@ -295,12 +295,11 @@
         <div class="result-list">
             <div class="d-flex justify-content-between align-items-center">
                 <h3 class="section-title"><i class="glyphicon glyphicon-flash"></i> 本次提取结果</h3>
-                <form method="POST" action="{{ url_for('clear_all_extract_results') }}" style="display:inline;">
-                    <input type="hidden" name="file_type" value="image">
-                    <button type="submit" class="btn btn-warning btn-sm">
+                <div id="clearAllClientResultsContainer" style="display:none;">
+                    <button type="button" class="btn btn-warning btn-sm" onclick="clearAllClientResults()">
                         <i class="glyphicon glyphicon-trash"></i> 清除所有结果
                     </button>
-                </form>
+                </div>
             </div>
             <div id="clientResultList"></div>
         </div>
@@ -431,9 +430,19 @@
             var content = (data && data.extracted_text)
                 ? ('<strong>提取的水印：</strong>' + data.extracted_text)
                 : ('<strong>错误：</strong>' + ((data && data.error) || '未知错误'));
-            wrapper.innerHTML = '<div class="result-header"><span class="result-filename">' + filename + '</span></div>' +
+            
+            // 为每个结果项生成唯一ID
+            var resultId = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            wrapper.id = resultId;
+            
+            wrapper.innerHTML = '<div class="result-header"><span class="result-filename">' + filename + '</span>' +
+                '<button type="button" class="btn btn-danger btn-sm" onclick="clearClientResult(\'' + resultId + '\')">' +
+                '<i class="glyphicon glyphicon-remove"></i> 清除</button></div>' +
                 '<div class="result-content">' + content + '</div>';
             list.prepend(wrapper);
+            
+            // 添加清除所有结果按钮（如果还没有的话）
+            addClearAllClientResultsButton();
         }
 
         // 显示提示信息
@@ -508,6 +517,53 @@
                 .finally(() => {
                     if (window.AppLoading) AppLoading.hide();
                 });
+        }
+
+        // 清除单个客户端结果
+        function clearClientResult(resultId) {
+            var resultElement = document.getElementById(resultId);
+            if (resultElement) {
+                resultElement.style.opacity = '0';
+                setTimeout(function() {
+                    resultElement.remove();
+                    
+                    // 检查是否还有其他结果，如果没有则隐藏整个区域
+                    var list = document.getElementById('clientResultList');
+                    if (list && list.children.length === 0) {
+                        document.getElementById('clientResultsSection').style.display = 'none';
+                        document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                    }
+                }, 300);
+            }
+        }
+
+        // 清除所有客户端结果
+        function clearAllClientResults() {
+            if (!confirm('确定要清除所有本次提取结果吗？')) {
+                return;
+            }
+            
+            var list = document.getElementById('clientResultList');
+            if (list) {
+                // 淡出动画
+                list.style.opacity = '0';
+                setTimeout(function() {
+                    list.innerHTML = '';
+                    document.getElementById('clientResultsSection').style.display = 'none';
+                    document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                    list.style.opacity = '1'; // 重置透明度
+                }, 300);
+            }
+        }
+
+        // 添加清除所有结果按钮
+        function addClearAllClientResultsButton() {
+            var container = document.getElementById('clearAllClientResultsContainer');
+            var list = document.getElementById('clientResultList');
+            
+            if (container && list && list.children.length > 0) {
+                container.style.display = 'block';
+            }
         }
 
         // 添加键盘快捷键支持

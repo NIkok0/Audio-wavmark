@@ -247,11 +247,14 @@
         <h3 class="section-title">
             <i class="glyphicon glyphicon-pencil"></i> 添加水印
         </h3>
-        <form method="POST" action="{{ url_for('image_add_watermark') }}" style="max-width: 500px; margin: 0 auto;">
+        <form method="POST" action="{{ url_for('image_add_watermark') }}" style="max-width: 500px; margin: 0 auto;" onsubmit="return validateWatermarkForm()">
             {{ form.hidden_tag() }}
             <input type="hidden" id="selectedFileIds" name="selected_file_ids" value="">
             <div class="form-group">
-                {{ form.watermark(class="form-control text-center", placeholder="请输入要嵌入的水印内容") }}
+                {{ form.watermark(class="form-control text-center", placeholder="请输入要嵌入的水印内容（最多10个汉字）", maxlength="10", id="watermarkInput") }}
+                <small class="form-text text-muted">
+                    <span id="charCount">0</span>/10 个字符
+                </small>
             </div>
             <div class="form-group text-center">
                 {{ form.submit(class="btn btn-primary") }}
@@ -307,7 +310,7 @@
 <script>
     var selectedFiles = [];
     
-    // 页面加载时检查URL参数
+    // 页面加载时检查URL参数并绑定事件
     window.onload = function() {
         var urlParams = new URLSearchParams(window.location.search);
         var selectedParam = urlParams.get('selected');
@@ -322,6 +325,20 @@
             });
             updateSelectedCount();
             showSelectedFilesInfo();
+        }
+        
+        // 绑定水印输入框事件
+        var watermarkInput = document.getElementById('watermarkInput');
+        if (watermarkInput) {
+            watermarkInput.addEventListener('input', function() {
+                validateInput(this);
+            });
+            watermarkInput.addEventListener('paste', function(e) {
+                // 延迟处理粘贴事件，确保内容已粘贴
+                setTimeout(function() {
+                    validateInput(watermarkInput);
+                }, 10);
+            });
         }
     };
 
@@ -433,6 +450,7 @@
             var watermarkInput = document.querySelector('#watermarkForm input[name="watermark"]');
             if (watermarkInput) {
                 watermarkInput.focus();
+                updateCharCount(); // 更新字符计数
             }
         }, 500);
     }
@@ -444,7 +462,105 @@
         var watermarkInput = document.querySelector('#watermarkForm input[name="watermark"]');
         if (watermarkInput) {
             watermarkInput.value = '';
+            updateCharCount(); // 重置字符计数
         }
+    }
+
+    // 更新字符计数
+    function updateCharCount() {
+        var input = document.getElementById('watermarkInput');
+        var counter = document.getElementById('charCount');
+        if (input && counter) {
+            var length = input.value.length;
+            counter.textContent = length;
+            
+            // 如果超过10个字符，显示警告色
+            if (length > 10) {
+                counter.style.color = '#d9534f';
+                input.style.borderColor = '#d9534f';
+            } else if (length >= 8) {
+                counter.style.color = '#f0ad4e';
+                input.style.borderColor = '#f0ad4e';
+            } else {
+                counter.style.color = '#5cb85c';
+                input.style.borderColor = '';
+            }
+        }
+    }
+
+    // 验证输入内容（只允许汉字）
+    function validateInput(input) {
+        var value = input.value;
+        // 移除非汉字字符
+        var chineseOnly = value.replace(/[^\u4e00-\u9fa5]/g, '');
+        
+        // 限制长度为10个字符
+        if (chineseOnly.length > 10) {
+            chineseOnly = chineseOnly.substring(0, 10);
+        }
+        
+        if (value !== chineseOnly) {
+            input.value = chineseOnly;
+            if (value.length > chineseOnly.length) {
+                // 显示提示信息
+                showInputTip('只能输入汉字，且最多10个字符！');
+            }
+        }
+        
+        updateCharCount();
+    }
+
+    // 显示输入提示
+    function showInputTip(message) {
+        var existingTip = document.getElementById('inputTip');
+        if (existingTip) {
+            existingTip.remove();
+        }
+        
+        var tip = document.createElement('div');
+        tip.id = 'inputTip';
+        tip.className = 'alert alert-warning';
+        tip.style.marginTop = '10px';
+        tip.style.padding = '8px 12px';
+        tip.style.fontSize = '12px';
+        tip.innerHTML = '<i class="glyphicon glyphicon-warning-sign"></i> ' + message;
+        
+        var formGroup = document.querySelector('#watermarkInput').closest('.form-group');
+        formGroup.appendChild(tip);
+        
+        setTimeout(function() {
+            tip.remove();
+        }, 3000);
+    }
+
+    // 表单提交前验证
+    function validateWatermarkForm() {
+        var input = document.getElementById('watermarkInput');
+        var value = input.value.trim();
+        
+        // 检查是否为空
+        if (!value) {
+            showInputTip('请输入水印内容！');
+            input.focus();
+            return false;
+        }
+        
+        // 检查是否只包含汉字
+        var chineseRegex = /^[\u4e00-\u9fa5]+$/;
+        if (!chineseRegex.test(value)) {
+            showInputTip('水印内容只能包含汉字！');
+            input.focus();
+            return false;
+        }
+        
+        // 检查长度
+        if (value.length > 10) {
+            showInputTip('水印内容不能超过10个汉字！');
+            input.focus();
+            return false;
+        }
+        
+        return true;
     }
 
     // 添加键盘快捷键支持

@@ -81,10 +81,10 @@
         }
         .app-sidebar .sidebar-title {
             font-weight: 700;
-            font-size: 14px;
+            font-size: 18px;
             color: #c7d2fe;
-            padding: 8px 10px;
-            margin-bottom: 8px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
             border-radius: 8px;
             background: rgba(99,102,241,.15);
         }
@@ -102,10 +102,20 @@
             text-decoration: none;
             border-radius: 8px;
         }
-        .app-sidebar .nav a:hover,
-        .app-sidebar .nav a.active {
+        .app-sidebar .nav a:hover {
             background: #374151;
             color: #fff;
+            transition: all 0.2s ease;
+        }
+        .app-sidebar .nav a.active {
+            background: #4f46e5;
+            color: #fff;
+            font-weight: 600;
+            border-left: 4px solid #818cf8;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+        }
+        .app-sidebar .nav a.active:hover {
+            background: #4338ca;
         }
         /* 登录后内容区域：右侧面板宽度与居中 */
         .app-content { margin-left: 220px; width: calc(100% - 220px); }
@@ -152,10 +162,10 @@
     <aside class="app-sidebar">
         <div class="sidebar-title">媒体处理</div>
         <ul class="nav">
-            <li><a href="{{ url_for('image_process') }}">图片</a></li>
-            <li><a href="{{ url_for('audio_process') }}">音频</a></li>
-            <li><a href="{{ url_for('video_process') }}">视频</a></li>
-            <li><a href="{{ url_for('text_process') }}">文档</a></li>
+            <li><a href="{{ url_for('image_process') }}" class="{% if request.path.startswith('/image/') %}active{% endif %}">图片</a></li>
+            <li><a href="{{ url_for('audio_process') }}" class="{% if request.path.startswith('/audio/') %}active{% endif %}">音频</a></li>
+            <li><a href="{{ url_for('video_process') }}" class="{% if request.path.startswith('/video/') %}active{% endif %}">视频</a></li>
+            <li><a href="{{ url_for('text_process') }}" class="{% if request.path.startswith('/text/') %}active{% endif %}">文档</a></li>
         </ul>
     </aside>
     {% endif %}

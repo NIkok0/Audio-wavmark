@@ -8,4 +8,6 @@ hyr.session.sql
 embed_file/
 extracted_file/
 migrations/
+.flaskenv
+
 
