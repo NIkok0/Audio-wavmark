@@ -628,61 +628,47 @@ def embed_sql_zbit(input_file, watermark):
     """SQL格式专用"""
     original_name = os.path.basename(input_file)
     name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'sql'}"
+    filename = f"{name_without_ext}_embed.{'md'}"
 
     # 从app.config获取保存路径
     embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
     full_path = os.path.join(embed_dir, filename)
 
     def watermark_to_zwc(watermark):
-        # 对于中文字符，需要用UTF-8编码而不是直接用ord()
-        utf8_bytes = watermark.encode('utf-8')
-        binary = ''.join(format(byte, '08b') for byte in utf8_bytes)
+        binary = ''.join(format(ord(c), '08b') for c in watermark)
         return ''.join('\u200B' if bit == '0' else '\u200D' for bit in binary)
 
     def embed_watermark(input_path, output_path, watermark):
-        import re
         zwc = watermark_to_zwc(watermark)
         inserted = False
 
         with open(input_path, 'r', encoding='utf-8') as f:
-            sql = f.read()
+            lines = f.readlines()
 
-        # 1. 尝试插入到 AS 别名中
-        def embed_in_alias(match):
-            nonlocal inserted
-            if inserted:
-                return match.group(0)
-            alias = match.group(2)
-            new_alias = alias + zwc
-            inserted = True
-            return f"{match.group(1)}{new_alias}"
-
-        alias_pattern = re.compile(r'(\bAS\s+)([a-zA-Z_][\w]*)', re.IGNORECASE)
-        sql = alias_pattern.sub(embed_in_alias, sql)
-
-        # 2. 若没有插入成功，尝试在 INSERT 的字符串值中插入水印
-        if not inserted:
-            def embed_in_insert(match):
-                nonlocal inserted
-                if inserted:
-                    return match.group(0)
-                values = match.group(1)
-                # 查找第一个字符串值 'xxx'
-                new_values = re.sub(r"('([^']*)')", lambda m: m.group(1)[:-1] + zwc + "'", values, count=1)
+        # 先找注释行嵌入水印（--单行注释 或 /*多行注释开头）
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith('--') or stripped.startswith('/*'):
+                lines[i] = line.rstrip('\n') + zwc + '\n'
                 inserted = True
-                return f"VALUES {new_values}"
+                break
 
-            insert_pattern = re.compile(r'VALUES\s*(\([^)]+\))', re.IGNORECASE)
-            sql = insert_pattern.sub(embed_in_insert, sql)
-
+        # 如果没有注释行，找第一条空行插入带水印注释
         if not inserted:
-            print("未找到可嵌入水印的位置（无别名也无 INSERT 语句）")
-        else:
-            print("水印已成功嵌入")
+            for i, line in enumerate(lines):
+                if line.strip() == '':
+                    lines[i] = f'-- {zwc}\n'
+                    inserted = True
+                    print("未发现注释，已在空行插入注释水印")
+                    break
+
+        # 如果依然没插入（没有空行），就在文件头插入一行注释水印
+        if not inserted:
+            lines.insert(0, f'-- {zwc}\n')
+            print("文件无空行，已在文件头插入注释水印")
 
         with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(sql)
+            f.writelines(lines)
 
     embed_watermark(input_file, full_path, watermark)
     return full_path
@@ -692,42 +678,18 @@ def extract_sql_zbit(input_file):
     import re
     def zwc_to_watermark(zwc_text):
         binary = ''.join('0' if c == '\u200B' else '1' for c in zwc_text if c in ('\u200B', '\u200D'))
-        
-        # 确保二进制长度是8的倍数
-        if len(binary) % 8 != 0:
-            binary = binary[:-(len(binary) % 8)] if len(binary) >= 8 else ''
-        
-        if not binary:
-            return None
-            
-        try:
-            chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
-            return ''.join(chars)
-        except ValueError:
-            return None
+        chars = [chr(int(binary[i:i + 8], 2)) for i in range(0, len(binary), 8)]
+        return ''.join(chars)
 
     def extract_watermark(path):
         with open(path, 'r', encoding='utf-8') as f:
-            sql = f.read()
-
-        # 1. 尝试从别名中提取
-        alias_pattern = re.compile(r'\bAS\s+([a-zA-Z_][\w\u200B\u200D]*)', re.IGNORECASE)
-        for alias in alias_pattern.findall(sql):
-            zwc = ''.join(c for c in alias if c in ('\u200B', '\u200D'))
-            if zwc:
-                print("水印提取自别名")
-                print("提取到的水印:", zwc_to_watermark(zwc))
-                return zwc_to_watermark(zwc)
-
-        # 2. 尝试从 INSERT 字符串值中提取
-        string_pattern = re.compile(r"'([^']*[\u200B\u200D][^']*)'")
-        for match in string_pattern.findall(sql):
-            zwc = ''.join(c for c in match if c in ('\u200B', '\u200D'))
-            if zwc:
-                print("水印提取自 INSERT 字符串值")
-                print("提取到的水印:", zwc_to_watermark(zwc))
-                return zwc_to_watermark(zwc)
-
+            for line in f:
+                if line.strip().startswith('--') or '/*' in line:
+                    zwc_part = ''.join(c for c in line if c in ('\u200B', '\u200D'))
+                    if zwc_part:
+                        watermark = zwc_to_watermark(zwc_part)
+                        print(f"提取到的水印: {watermark}")
+                        return watermark
         print("未找到零宽字符水印")
         return None
 
