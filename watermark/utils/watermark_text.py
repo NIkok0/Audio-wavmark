@@ -850,9 +850,9 @@ def embed_xlsx_ns(input_file, watermark):
         cell.value = watermark_text
 
         # 设置字体颜色与背景相同，"伪装" 不可见
-        cell.font = Font(color=cell.fill.fgColor.rgb or "FFFFFF")  # 默认白色
+        # cell.font = Font(color=cell.fill.fgColor.rgb or "FFFFFF")  # 默认白色
         # 可选：你也可以直接指定白色或其他背景色
-        # cell.font = Font(color="FFFFFF")
+        cell.font = Font(color="FFFFFF")
 
         # 隐藏该列和行
         ws.row_dimensions[row].hidden = True
