@@ -199,6 +199,32 @@
         color: #fff !important;
         text-decoration: none !important;
     }
+    /* 居中错误弹窗 */
+    .center-modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 2000;
+        display: none;
+    }
+    .center-modal {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: #fff;
+        border-radius: 6px;
+        min-width: 360px;
+        max-width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,.2);
+        padding: 16px 16px 12px;
+        border: 1px solid #f5c6cb;
+    }
+    .center-modal .modal-head {
+        display: flex; justify-content: space-between; align-items: center;
+        color: #a94442;
+    }
+    .center-modal .modal-body { margin-top: 8px; color: #a94442; }
+    .center-modal .modal-actions { text-align: right; margin-top: 12px; }
 </style>
 {% endblock %}
 
@@ -256,14 +282,14 @@
                     </label>
                     <small class="text-muted">
                         <br>
-                        处理时间：{{ file.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        处理时间：{{ to_local_time(file.updated_at) }}
                         <br>
                         大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
                         <br>
                         格式：{{ file.file_format.upper() }}
                     </small>
                     <div class="file-path">
-                        <strong>文件路径:</strong> {{ file.watermarked_path }}
+                        <!-- <strong>文件路径:</strong> {{ file.watermarked_path }} -->
                         <strong>状态:</strong> {% if file.watermarked_path and file.watermarked_path|path_exists %}存在{% else %}不存在{% endif %}
                     </div>
                 </div>
@@ -519,33 +545,38 @@
 
     // 显示提示信息
     function showAlert(type, message) {
-        // 移除已有的提示
-        var existingAlert = document.querySelector('.alert');
-        if (existingAlert) {
-            existingAlert.remove();
+        var old = document.getElementById('centerModalBackdrop');
+        if (old) old.remove();
+
+        if (type === 'success') {
+            var alertHtml = `
+                <div class="alert alert-success alert-dismissible" role="alert" style="margin-top: 20px;">
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    <i class="glyphicon glyphicon-ok"></i> ${message}
+                </div>`;
+            var container = document.querySelector('.watermark-container');
+            container.insertAdjacentHTML('afterbegin', alertHtml);
+            return;
         }
 
-        // 创建新的提示
-        var alertHtml = `
-            <div class="alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible" role="alert" style="margin-top: 20px;">
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-                <i class="glyphicon glyphicon-${type === 'success' ? 'ok' : 'exclamation-sign'}"></i> ${message}
-            </div>
-        `;
-
-        // 插入提示到页面
-        var container = document.querySelector('.watermark-container');
-        container.insertAdjacentHTML('afterbegin', alertHtml);
-
-        // 3秒后自动关闭提示
-        setTimeout(() => {
-            var alert = document.querySelector('.alert');
-            if (alert) {
-                alert.remove();
-            }
-        }, 3000);
+        var backdrop = document.createElement('div');
+        backdrop.className = 'center-modal-backdrop';
+        backdrop.id = 'centerModalBackdrop';
+        backdrop.innerHTML = `
+            <div class="center-modal">
+                <div class="modal-head">
+                    <strong><i class="glyphicon glyphicon-exclamation-sign"></i> 提取失败</strong>
+                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">${message || '提取失败，请重试或更换文件。'}</div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-danger" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                </div>
+            </div>`;
+        document.body.appendChild(backdrop);
+        backdrop.style.display = 'block';
     }
 
     // 清除单个客户端结果

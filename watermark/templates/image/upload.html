@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/pagination.html" import render_pagination %}
 
 {% block title %}上传图片 - 数字水印系统{% endblock %}
 
@@ -276,7 +277,7 @@
     </div>
 
     <!-- 批量操作 -->
-    {% if files %}
+    {% if unwatermarked_pagination.items or watermarked_pagination.items %}
     <div class="batch-actions">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
@@ -285,23 +286,26 @@
                 </label>
                 <span id="selectedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
             </div>
-            <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
+            <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-20px);">
                 <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedFiles()" id="deleteSelectedBtn" disabled>
                     <i class="glyphicon glyphicon-trash"></i> 删除选中
                 </button>
-                <a href="{{ url_for('image_add_watermark') }}" class="btn btn-primary btn-sm" id="addWatermarkBtn" style="display: none;" onclick="return !this.classList.contains('disabled');">
+                <a href="{{ url_for('image_add_watermark') }}" class="btn btn-primary btn-sm disabled" id="addWatermarkBtn" title="为选中的文件添加水印" onclick="return !this.classList.contains('disabled');">
                     <i class="glyphicon glyphicon-tint"></i> 为选中文件添加水印
                 </a>
+                <button type="button" class="btn btn-success btn-sm" id="batchDownloadBtn" onclick="downloadSelectedFiles()" disabled>
+                    <i class="glyphicon glyphicon-download"></i> 批量下载
+                </button>
             </div>
         </div>
     </div>
     {% endif %}
 
-    <!-- 显示已上传的文件列表 -->
-    <h3 class="section-title"><i class="glyphicon glyphicon-picture"></i> 已上传的图片</h3>
-    {% if files %}
+    <!-- 待添加水印 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-time"></i> 待添加水印的图片</h3>
+    {% if unwatermarked_pagination.items %}
     <div class="file-list">
-        {% for file in files %}
+        {% for file in unwatermarked_pagination.items %}
         <div class="file-item">
             <div class="file-info">
                 <label style="margin: 0; cursor: pointer;">
@@ -311,23 +315,14 @@
                 </label>
                 <small class="text-muted">
                     <br>
-                    上传时间：{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                    上传时间：{{ to_local_time(file.created_at) }}
                     <br>
                     大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
                     <br>
                     格式：{{ file.file_format.upper() }}
-                    {% if file.has_watermark %}
-                    <br>
-                    <span class="label label-success">已添加水印</span>
-                    {% endif %}
                 </small>
             </div>
             <div class="file-actions">
-                {% if file.has_watermark %}
-                <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-primary">
-                    <i class="glyphicon glyphicon-download"></i> 下载
-                </a>
-                {% endif %}
                 <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此图片吗？');">
                     <button type="submit" class="btn btn-sm btn-danger">
                         <i class="glyphicon glyphicon-trash"></i> 删除
@@ -337,10 +332,52 @@
         </div>
         {% endfor %}
     </div>
+    
+    <!-- 分页控件：未加水印列表 -->
+    {{ render_pagination(unwatermarked_pagination, 'image_upload', 'page') }}
     {% else %}
-    <div class="empty-list">
-        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已上传的图片</p>
+    <div class="empty-list"><p><i class="glyphicon glyphicon-info-sign"></i> 暂无待添加水印的图片</p></div>
+    {% endif %}
+
+    <!-- 已添加水印 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-ok"></i> 已添加水印的图片</h3>
+    {% if watermarked_pagination.items %}
+    <div class="file-list">
+        {% for file in watermarked_pagination.items %}
+        <div class="file-item">
+            <div class="file-info">
+                <label style="margin: 0; cursor: pointer;">
+                    <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateSelectedCount()">
+                    <i class="glyphicon glyphicon-picture"></i>
+                    <span>{{ file.filename }}</span>
+                </label>
+                <small class="text-muted">
+                    <br>
+                    上传时间：{{ to_local_time(file.created_at) }}
+                    <br>
+                    大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
+                    <br>
+                    格式：{{ file.file_format.upper() }}
+                    <br>
+                    <span class="label label-success">已添加水印</span>
+                </small>
+            </div>
+            <div class="file-actions">
+                <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-primary">
+                    <i class="glyphicon glyphicon-download"></i> 下载
+                </a>
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此图片吗？');">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
     </div>
+    {{ render_pagination(watermarked_pagination, 'image_upload', 'watermarked_page') }}
+    {% else %}
+    <div class="empty-list"><p><i class="glyphicon glyphicon-info-sign"></i> 暂无已添加水印的图片</p></div>
     {% endif %}
 </div>
 {% endblock %}
@@ -508,9 +545,11 @@
         var selectedCount = document.getElementById('selectedCount');
         var deleteBtn = document.getElementById('deleteSelectedBtn');
         var addWatermarkBtn = document.getElementById('addWatermarkBtn');
+        var batchDownloadBtn = document.getElementById('batchDownloadBtn');
         
         selectedCount.textContent = '已选择 ' + count + ' 个文件';
         deleteBtn.disabled = count === 0;
+        batchDownloadBtn.disabled = count === 0;
         
         if (count > 0) {
             // 检查选中的文件中是否有已添加水印的文件
@@ -527,10 +566,8 @@
             
             if (hasWatermarkedFiles) {
                 // 如果有已添加水印的文件，禁用添加水印按钮
-                addWatermarkBtn.style.display = 'inline-block';
                 addWatermarkBtn.classList.add('disabled');
                 addWatermarkBtn.title = '无法再为已添加水印的文件添加水印';
-                addWatermarkBtn.removeAttribute('href'); // 移除链接，防止跳转
                 
                 // 显示警告信息
                 var warningDiv = document.getElementById('watermarkWarning');
@@ -547,8 +584,7 @@
                     }
                 }
             } else {
-                // 如果没有已添加水印的文件，正常显示添加水印按钮
-                addWatermarkBtn.style.display = 'inline-block';
+                // 如果没有已添加水印的文件，正常启用添加水印按钮
                 addWatermarkBtn.classList.remove('disabled');
                 addWatermarkBtn.title = '为选中的文件添加水印';
                 
@@ -563,7 +599,7 @@
                 addWatermarkBtn.href = '{{ url_for("image_add_watermark") }}?selected=' + selectedIds;
             }
         } else {
-            addWatermarkBtn.style.display = 'none';
+            addWatermarkBtn.classList.add('disabled');
             
             // 移除警告信息
             var warningDiv = document.getElementById('watermarkWarning');
@@ -592,6 +628,27 @@
         Promise.all(promises).then(function() {
             window.location.reload();
         });
+    }
+
+    // 批量下载选中文件（已加水印）
+    function downloadSelectedFiles() {
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        if (checkboxes.length === 0) return;
+
+        var selectedIds = Array.from(checkboxes).map(function(cb) { return cb.value; }).join(',');
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("batch_download") }}';
+
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'file_ids';
+        input.value = selectedIds;
+        form.appendChild(input);
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
     }
 </script>
 {% endblock %} 

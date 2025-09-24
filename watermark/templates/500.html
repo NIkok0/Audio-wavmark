@@ -1,7 +1,48 @@
 {% extends "base.html" %}
-{% block title %} - 500 - {% endblock %}
+{% block title %} - 服务器错误 - {% endblock %}
+{% block styles %}
+<style>
+    .error-page { min-height: 60vh; }
+    .error-title { font-size: 2.5rem; font-weight: 800; }
+    @media (min-width: 992px) {
+        .error-title { font-size: 3rem; }
+    }
+    .error-subtitle { font-size: 1.125rem; color: #6c757d; }
+    .error-actions { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: nowrap; }
+    .error-actions .btn { padding: 0.6rem 1.2rem; font-weight: 600; display: inline-flex; }
+    .error-count { font-weight: 700; color: #e7a11f; }
+</style>
+{% endblock %}
 {% block page_content %}
-<div class="page-header">
-    <h1>500 Internal Server Error</h1>
+<div class="error-page d-flex flex-column justify-content-center align-items-center text-center py-5">
+    <h1 class="error-title text-danger mb-3">服务器内部错误（500）</h1>
+    <p class="error-subtitle mb-2">服务器处理请求时发生了意外错误，请稍后再试。</p>
+    <p class="text-secondary mb-4">将在 <span id="redirect-seconds" class="error-count">8</span> 秒后为您跳转。若未自动跳转，您可以：</p>
+    <div class="error-actions">
+        <button class="btn btn-outline-secondary me-2" onclick="history.back()">返回上一页</button>
+        <a class="btn btn-primary" href="{{ url_for('index') }}">返回首页</a>
+    </div>
 </div>
+
+<script>
+(function () {
+    var seconds = 8;
+    var el = document.getElementById('redirect-seconds');
+    var timer = setInterval(function () {
+        seconds -= 1;
+        if (el) el.textContent = seconds;
+        if (seconds <= 0) {
+            clearInterval(timer);
+            try {
+                var hasReferrer = document.referrer && new URL(document.referrer).origin === window.location.origin;
+                if (hasReferrer) {
+                    history.back();
+                    return;
+                }
+            } catch (e) {}
+            window.location.href = "{{ url_for('index') }}";
+        }
+    }, 1000);
+})();
+</script>
 {% endblock %}

@@ -12,6 +12,12 @@
         .navbar {
             background-color: #343a40 !important;
             padding: 1rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1050;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
         .navbar-brand, .nav-link {
@@ -69,11 +75,11 @@
         /* 左侧固定媒体处理侧边栏（仅登录后显示） */
         .app-sidebar {
             position: fixed;
-            top: 64px; /* 贴合导航栏下方，若导航高变化可微调 */
+            top: 64px; /* 紧贴导航栏，消除缝隙 */
             left: 0;
             width: 220px;
             bottom: 0;
-            background: #1f2937; /* 深色侧栏 */
+            background: #343a40; /* 与导航栏相同的颜色 */
             color: #e5e7eb;
             box-shadow: 2px 0 10px rgba(0,0,0,.1);
             z-index: 1000;
@@ -82,11 +88,11 @@
         .app-sidebar .sidebar-title {
             font-weight: 700;
             font-size: 18px;
-            color: #c7d2fe;
+            color: #fff;
             padding: 12px 14px;
             margin-bottom: 12px;
             border-radius: 8px;
-            background: rgba(99,102,241,.15);
+            background: rgba(255,255,255,.1);
         }
         .app-sidebar .nav {
             list-style: none;
@@ -103,20 +109,25 @@
             border-radius: 8px;
         }
         .app-sidebar .nav a:hover {
-            background: #374151;
+            background: #495057;
             color: #fff;
             transition: all 0.2s ease;
         }
         .app-sidebar .nav a.active {
-            background: #4f46e5;
+            background: #007bff;
             color: #fff;
             font-weight: 600;
-            border-left: 4px solid #818cf8;
-            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+            border-left: 4px solid #17a2b8;
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
         }
         .app-sidebar .nav a.active:hover {
-            background: #4338ca;
+            background: #0056b3;
         }
+        /* 页面主体顶部边距，避免被固定导航栏遮挡 */
+        body {
+            padding-top: 80px; /* 固定导航栏的高度 */
+        }
+        
         /* 登录后内容区域：右侧面板宽度与居中 */
         .app-content { margin-left: 220px; width: calc(100% - 220px); }
         .app-content-inner { max-width: 1140px; margin: 0 auto; }
@@ -127,16 +138,29 @@
     <!-- 主导航栏 -->
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid px-0">
-            <a class="navbar-brand" href="{{ url_for('index') }}">数字水印系统</a>
+            <a class="navbar-brand me-3" href="{{ url_for('index') }}">数字水印系统</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse justify-content-between" id="navbarNav">
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
                 <!-- 左侧媒体处理菜单（顶部导航处不再显示） -->
                 <!-- 已根据需求改为登录后显示在左侧固定侧边栏 -->
                 
                 <!-- 右侧用户信息 -->
-                <ul class="navbar-nav ms-auto me-0">
+                <ul class="navbar-nav align-items-center">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item me-3">
+                        <form class="nav-search d-flex align-items-center" role="search" method="get" action="{{ url_for('search') }}" onsubmit="if(!this.q.value.trim()){return false;}">
+                            <button class="btn btn-sm btn-outline-light nav-search-toggle" type="button" aria-label="搜索" title="搜索">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10.001 5 5 0 0 1 0 10.001z"/>
+                                </svg>
+                            </button>
+                            <input class="form-control form-control-sm nav-search-input" type="search" placeholder="搜索文件名" aria-label="Search" name="q" value="{{ request.args.get('q','') }}" />
+                            <button type="submit" class="d-none">提交</button>
+                        </form>
+                    </li>
+                    {% endif %}
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
                         <span class="nav-link">欢迎，{{ current_user.username }}</span>
@@ -229,8 +253,44 @@
                     }, 500);
                 });
             });
+
+            // 导航搜索交互：点击放大镜展开并聚焦输入框
+            var navToggle = document.querySelector('.nav-search-toggle');
+            var navInput = document.querySelector('.nav-search-input');
+            if (navToggle && navInput) {
+                navToggle.addEventListener('click', function() {
+                    navInput.focus();
+                });
+            }
         });
     </script>
+    <style>
+        /* 导航搜索交互样式：默认收起输入框，聚焦或悬停时展开 */
+        .nav-search { position: relative; }
+        .nav-search-input {
+            width: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: width .2s ease, opacity .2s ease;
+        }
+        .nav-search:hover .nav-search-input,
+        .nav-search-input:focus {
+            width: 180px;
+            opacity: 1;
+            visibility: visible;
+            margin-left: 8px;
+        }
+        @media (max-width: 576px) {
+            .nav-search:hover .nav-search-input,
+            .nav-search-input:focus {
+                width: 120px;
+            }
+        }
+        /* 放大镜图标下移 2px */
+        .nav-search-toggle svg { position: relative; top: 2px; }
+        /* 翻页按钮整体下移 2px */
+        .pagination { transform: translateY(20px); }
+    </style>
     {% block scripts %}{% endblock %}
 </body>
 </html>

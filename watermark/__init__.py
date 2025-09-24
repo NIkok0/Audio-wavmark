@@ -7,6 +7,7 @@ from flask import Flask
 from flask_bootstrap import Bootstrap
 from flask_dropzone import Dropzone
 from flask_login import LoginManager, current_user
+from watermark.utils.time_provider import to_local_time
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
@@ -108,8 +109,11 @@ def inject_user():
     return dict(user=current_user)
 
 @app.context_processor
-def inject_now():
-    return {'now': datetime.datetime.now}
+def inject_time_helpers():
+    return {
+        'now': datetime.datetime.now,
+        'to_local_time': to_local_time,
+    }
 
 @login_manager.user_loader
 def load_user(user_id):  # 创建用户加载回调函数，接受用户 ID 作为参数

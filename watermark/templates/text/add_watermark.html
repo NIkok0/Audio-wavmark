@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "bootstrap/wtf.html" as wtf %}
+{% from "macros/pagination.html" import render_pagination %}
 
 {% block title %}添加文本水印 - 数字水印系统{% endblock %}
 
@@ -41,6 +42,14 @@
     .file-item.selected {
         background-color: #e3f2fd;
         border-color: #2196f3;
+    }
+    .file-item.watermarked-file {
+        background-color: #f8f9fa;
+        border-color: #28a745;
+        border-left: 4px solid #28a745;
+    }
+    .file-item.watermarked-file:hover {
+        background-color: #e9ecef;
     }
     .file-info {
         flex-grow: 1;
@@ -159,6 +168,12 @@
         color: #fff !important;
         text-decoration: none !important;
     }
+    /* 居中错误弹窗 */
+    .center-modal-backdrop { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); z-index:2000; display:none; }
+    .center-modal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:6px; min-width:360px; max-width:90%; box-shadow:0 10px 30px rgba(0,0,0,.2); padding:16px 16px 12px; border:1px solid #f5c6cb; }
+    .center-modal .modal-head { display:flex; justify-content:space-between; align-items:center; color:#a94442; }
+    .center-modal .modal-body { margin-top:8px; color:#a94442; }
+    .center-modal .modal-actions { text-align:right; margin-top:12px; }
 </style>
 {% endblock %}
 
@@ -183,7 +198,7 @@
     </div>
 
     <!-- 批量操作 -->
-    {% if files %}
+    {% if unwatermarked_pagination.items %}
     <div class="batch-actions">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
@@ -196,6 +211,9 @@
                 <button type="button" class="btn btn-primary btn-sm" onclick="addWatermarkToSelected()" id="addWatermarkBtn" disabled>
                     <i class="glyphicon glyphicon-tint"></i> 为选中文件添加水印
                 </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedFiles()" id="deleteSelectedBtn" disabled>
+                    <i class="glyphicon glyphicon-trash"></i> 批量删除
+                </button>
             </div>
         </div>
     </div>
@@ -203,10 +221,9 @@
 
     <!-- 显示未添加水印的文件列表 -->
     <h3 class="section-title"><i class="glyphicon glyphicon-file"></i> 待添加水印的文本</h3>
-    {% if files and files|selectattr('has_watermark', 'equalto', false)|list|length > 0 %}
+    {% if unwatermarked_pagination.items %}
     <div class="file-list">
-        {% for file in files %}
-        {% if not file.has_watermark %}
+        {% for file in unwatermarked_pagination.items %}
         <div class="file-item" data-file-id="{{ file.id }}">
             <div class="file-info">
                 <label style="margin: 0; cursor: pointer;">
@@ -216,7 +233,7 @@
                 </label>
                 <small class="text-muted">
                     <br>
-                    上传时间：{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                    上传时间：{{ to_local_time(file.created_at) }}
                     <br>
                     大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
                     <br>
@@ -231,9 +248,11 @@
                 </form>
             </div>
         </div>
-        {% endif %}
         {% endfor %}
     </div>
+    
+    <!-- 分页控件 -->
+    {{ render_pagination(unwatermarked_pagination, 'text_add_watermark', 'page') }}
     {% else %}
     <div class="empty-list">
         <p><i class="glyphicon glyphicon-info-sign"></i> 暂无待添加水印的文本</p>
@@ -241,11 +260,11 @@
     {% endif %}
 
     <!-- 水印添加表单 -->
-    <div id="watermarkForm" class="watermark-form" style="display: none;">
+    <div id="watermarkForm" class="watermark-form">
         <h3 class="section-title">
             <i class="glyphicon glyphicon-pencil"></i> 添加水印
         </h3>
-        <form method="POST" action="{{ url_for('text_add_watermark') }}" style="max-width: 500px; margin: 0 auto;">
+        <form method="POST" action="{{ url_for('text_add_watermark') }}" style="max-width: 500px; margin: 0 auto;" onsubmit="return validateWatermarkForm()">
             {{ form.hidden_tag() }}
             <input type="hidden" id="selectedFileIds" name="selected_file_ids" value="">
             <div class="form-group">
@@ -253,45 +272,70 @@
             </div>
             <div class="form-group text-center">
                 {{ form.submit(class="btn btn-primary") }}
-                <button type="button" class="btn btn-default" onclick="hideWatermarkForm()">取消</button>
+                <button type="button" class="btn btn-default" onclick="clearWatermarkForm()">清空</button>
             </div>
         </form>
     </div>
 
     <!-- 显示已添加水印的文件列表 -->
-    <h3 class="section-title"><i class="glyphicon glyphicon-ok-circle"></i> 已添加水印的文本</h3>
-    {% if files and files|selectattr('has_watermark')|list|length > 0 %}
+    <h3 class="section-title"><i class="glyphicon glyphicon-ok"></i> 已添加水印的文本</h3>
+    {% if watermarked_pagination.items %}
+    <!-- 批量操作 - 已添加水印的文件 -->
+    <div class="batch-actions">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <label>
+                    <input type="checkbox" id="selectAllWatermarked" onchange="toggleSelectAllWatermarked()"> 全选
+                </label>
+                <span id="selectedWatermarkedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
+                <button type="button" class="btn btn-success btn-sm" onclick="downloadSelectedFiles()" id="downloadSelectedBtn" disabled>
+                    <i class="glyphicon glyphicon-download-alt"></i> 批量下载
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedWatermarkedFiles()" id="deleteSelectedWatermarkedBtn" disabled>
+                    <i class="glyphicon glyphicon-trash"></i> 批量删除
+                </button>
+            </div>
+        </div>
+    </div>
     <div class="file-list">
-        {% for file in files %}
-        {% if file.has_watermark %}
-        <div class="file-item">
+        {% for file in watermarked_pagination.items %}
+        <div class="file-item watermarked-file" data-file-id="{{ file.id }}">
             <div class="file-info">
-                <i class="glyphicon glyphicon-file"></i>
-                <span>{{ file.filename }}</span>
-                <small class="text-muted">处理时间：{{ file.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
-                {% if file.processing_status == 'failed' %}
-                <span class="label label-danger">处理失败</span>
-                {% if file.error_message %}
-                <small class="text-danger">{{ file.error_message }}</small>
-                {% endif %}
-                {% endif %}
+                <label style="margin: 0; cursor: pointer;">
+                    <input type="checkbox" class="watermarked-file-checkbox" value="{{ file.id }}" onchange="updateWatermarkedSelectedCount()">
+                    <i class="glyphicon glyphicon-ok text-success"></i>
+                    <span>{{ file.filename }}</span>
+                </label>
+                <small class="text-muted">
+                    <br>
+                    上传时间：{{ to_local_time(file.created_at) }}
+                    <br>
+                    大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
+                    <br>
+                    格式：{{ file.file_format.upper() }}
+                </small>
             </div>
             <div class="file-actions">
-                {% if file.processing_status == 'completed' %}
                 <a href="{{ url_for('download', file_id=file.id) }}" class="btn btn-sm btn-success">
                     <i class="glyphicon glyphicon-download-alt"></i> 下载
                 </a>
-                {% endif %}
-                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此文本吗？');">
+                <a href="{{ url_for('text_extract_watermark') }}" class="btn btn-sm btn-info" style="margin-left: 5px;">
+                    <i class="glyphicon glyphicon-search"></i> 提取水印
+                </a>
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline; margin-left: 5px;" onsubmit="return confirm('确定要删除此文本吗？');">
                     <button type="submit" class="btn btn-sm btn-danger">
                         <i class="glyphicon glyphicon-trash"></i> 删除
                     </button>
                 </form>
             </div>
         </div>
-        {% endif %}
         {% endfor %}
     </div>
+    
+    <!-- 分页控件 -->
+    {{ render_pagination(watermarked_pagination, 'text_add_watermark', 'watermarked_page') }}
     {% else %}
     <div class="empty-list">
         <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已添加水印的文本</p>
@@ -362,6 +406,10 @@
         
         // 更新按钮状态
         addWatermarkBtn.disabled = count === 0;
+        var deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.disabled = count === 0;
+        }
         
         // 更新选中文件列表
         selectedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
@@ -435,14 +483,25 @@
         }, 500);
     }
 
-    // 隐藏水印表单
-    function hideWatermarkForm() {
-        document.getElementById('watermarkForm').style.display = 'none';
+    // 清空水印表单
+    function clearWatermarkForm() {
         // 清空表单内容
         var watermarkInput = document.querySelector('#watermarkForm input[name="watermark"]');
         if (watermarkInput) {
             watermarkInput.value = '';
+            watermarkInput.focus(); // 重新聚焦到输入框
         }
+        // 清除选中的文件
+        var checkboxes = document.querySelectorAll('.file-checkbox');
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = false;
+        });
+        updateSelectedCount();
+    }
+
+    // 保留隐藏功能以兼容ESC键
+    function hideWatermarkForm() {
+        clearWatermarkForm();
     }
 
     // 添加键盘快捷键支持
@@ -464,6 +523,207 @@
                 hideWatermarkForm();
             }
         }
+    });
+
+    // 已添加水印文件的选中数量管理
+    var selectedWatermarkedFiles = [];
+
+    // 已添加水印文件的全选功能
+    function toggleSelectAllWatermarked() {
+        var selectAll = document.getElementById('selectAllWatermarked');
+        var checkboxes = document.querySelectorAll('.watermarked-file-checkbox');
+        
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+        
+        updateWatermarkedSelectedCount();
+    }
+
+    // 更新已添加水印文件的选中数量
+    function updateWatermarkedSelectedCount() {
+        var checkboxes = document.querySelectorAll('.watermarked-file-checkbox:checked');
+        var allCheckboxes = document.querySelectorAll('.watermarked-file-checkbox');
+        var count = checkboxes.length;
+        var totalCount = allCheckboxes.length;
+        var selectedCount = document.getElementById('selectedWatermarkedCount');
+        var downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+        var deleteSelectedWatermarkedBtn = document.getElementById('deleteSelectedWatermarkedBtn');
+        var selectAll = document.getElementById('selectAllWatermarked');
+        
+        // 更新选中数量显示
+        if (selectedCount) {
+            selectedCount.textContent = '已选择 ' + count + ' 个文件';
+        }
+        
+        // 更新全选框状态
+        if (selectAll) {
+            if (count === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else if (count === totalCount) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            }
+        }
+        
+        // 更新按钮状态
+        if (downloadSelectedBtn) {
+            downloadSelectedBtn.disabled = count === 0;
+        }
+        if (deleteSelectedWatermarkedBtn) {
+            deleteSelectedWatermarkedBtn.disabled = count === 0;
+        }
+        
+        // 更新选中文件列表
+        selectedWatermarkedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    }
+
+    // 批量删除功能
+    function deleteSelectedFiles() {
+        if (selectedFiles.length === 0) {
+            alert('请先选择要删除的文件');
+            return;
+        }
+        
+        if (confirm('确定要删除选中的 ' + selectedFiles.length + ' 个文件吗？此操作不可撤销！')) {
+            // 创建表单并提交
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/batch_delete';
+            
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'file_ids';
+            input.value = selectedFiles.join(',');
+            form.appendChild(input);
+            
+            var csrfToken = document.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+                var csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken.value;
+                form.appendChild(csrfInput);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    // 批量删除已添加水印的文件
+    function deleteSelectedWatermarkedFiles() {
+        if (selectedWatermarkedFiles.length === 0) {
+            alert('请先选择要删除的文件');
+            return;
+        }
+        
+        if (confirm('确定要删除选中的 ' + selectedWatermarkedFiles.length + ' 个文件吗？此操作不可撤销！')) {
+            // 创建表单并提交
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/batch_delete';
+            
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'file_ids';
+            input.value = selectedWatermarkedFiles.join(',');
+            form.appendChild(input);
+            
+            var csrfToken = document.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+                var csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken.value;
+                form.appendChild(csrfInput);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    // 批量下载功能
+    function downloadSelectedFiles() {
+        if (selectedWatermarkedFiles.length === 0) {
+            alert('请先选择要下载的文件');
+            return;
+        }
+        
+        // 创建表单并提交
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/batch_download';
+        
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'file_ids';
+        input.value = selectedWatermarkedFiles.join(',');
+        form.appendChild(input);
+        
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (csrfToken) {
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.value;
+            form.appendChild(csrfInput);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // 表单提交前：同步选中ID，确保仅处理勾选文件
+    function validateWatermarkForm() {
+        var selectedIdsInput = document.getElementById('selectedFileIds');
+        if (!selectedFiles || selectedFiles.length === 0) {
+            alert('请先选择要添加水印的文件');
+            return false;
+        }
+        if (selectedIdsInput) {
+            selectedIdsInput.value = selectedFiles.join(',');
+        }
+        return true;
+    }
+
+    // 居中错误弹窗（手动关闭）
+    function showCenterError(message) {
+        var old = document.getElementById('centerModalBackdrop');
+        if (old) old.remove();
+        var backdrop = document.createElement('div');
+        backdrop.className = 'center-modal-backdrop';
+        backdrop.id = 'centerModalBackdrop';
+        backdrop.innerHTML = `
+            <div class="center-modal">
+                <div class="modal-head">
+                    <strong><i class="glyphicon glyphicon-exclamation-sign"></i> 处理失败</strong>
+                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">${message || '添加水印失败，请重试或更换文件。'}</div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-danger" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                </div>
+            </div>`;
+        document.body.appendChild(backdrop);
+        backdrop.style.display = 'block';
+    }
+
+    // 将包含“失败/出错”的闪存消息改为居中弹窗
+    document.addEventListener('DOMContentLoaded', function() {
+        var alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(a){
+            var text = a.textContent || '';
+            if (text.indexOf('失败') !== -1 || text.indexOf('出错') !== -1) {
+                showCenterError(text.trim());
+                a.remove();
+            }
+        });
     });
 </script>
 {% endblock %}

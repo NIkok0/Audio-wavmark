@@ -2,7 +2,7 @@ FLASK_ENV=development
 FLASK_DEBUG=1
 FLASK_APP=watermark
 SECRET_KEY=your_secret_key_here
-SQLALCHEMY_DATABASE_URI=mysql+pymysql://root:88888888@localhost:3306/watermark_test
+SQLALCHEMY_DATABASE_URI=mysql+pymysql://root:88888888@localhost:3306/uestcwm
 SQLALCHEMY_TRACK_MODIFICATIONS=False
 
 # 基础路径配置
@@ -47,4 +47,10 @@ DEFAULT_MAX_SIZE=104857600
 LOG_LEVEL=INFO
 LOG_MAX_SIZE=10485760
 LOG_BACKUP_COUNT=5
+
+# 统一时间配置
+# 共用时间 API（返回 UTC）。示例：worldtimeapi；也可指向你们的内部网关。
+COMMON_TIME_API_URL=https://worldtimeapi.org/api/timezone/Etc/UTC
+# 展示时区（IANA 标准名称），默认 Asia/Shanghai，可改如 Europe/Berlin、UTC 等
+APP_TIMEZONE=Asia/shanghai
 

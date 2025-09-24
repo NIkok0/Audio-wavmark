@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/pagination.html" import render_pagination %}
 {% block title %} - Index - {% endblock %}
 {% block styles %}
 {{ super() }}
@@ -159,64 +160,106 @@
         {% endif %}
         <div class="row g-3">
             <div class="col-md-6">
-                <div class="card">
+        <div class="card" id="typesCard" style="transition: height .2s ease;">
                     <div class="card-body">
                         <h6 class="card-subtitle mb-3 text-muted">类型分布</h6>
                         <canvas id="typesPie" data-payload='{{ {"labels": user_type_labels, "values": user_type_values }|tojson|safe }}' height="280" style="width:100%; display:block;"></canvas>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="card h-100">
+    <div class="col-md-6" id="rightListsColumn">
+                <!-- 未添加水印的文件列表 -->
+                <div class="card mb-3">
                     <div class="card-body">
-                        <h6 class="card-subtitle mb-3 text-muted">最近文件</h6>
-                        {% if user_recent_files %}
-                        <div class="table-responsive">
+                        <h6 class="card-subtitle mb-3 text-muted">未添加水印的文件</h6>
+                        {% if user_unwatermarked_pagination and user_unwatermarked_pagination.items %}
+                        <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
                             <table class="table table-sm align-middle" style="table-layout: fixed;">
                                 <colgroup>
-                                    <col style="width:28%">
-                                    <col style="width:12%">
-                                    <col style="width:14%">
-                                    <col style="width:28%">
-                                    <col style="width:18%">
+                                    <col style="width:35%">
+                                    <col style="width:15%">
+                                    <col style="width:15%">
+                                    <col style="width:35%">
                                 </colgroup>
                                 <thead>
                                     <tr>
                                         <th>文件名</th>
                                         <th>类型</th>
                                         <th>大小</th>
-                                        <th>状态</th>
                                         <th>时间</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for f in user_recent_files %}
+                                    {% for f in user_unwatermarked_pagination.items %}
                                     <tr>
                                         <td>
-                                            <div class="text-truncate" style="max-width: 100%;" title="{{ f.filename }}">{{ f.filename }}</div>
+                                            <div class="text-truncate" style="max-width: 100%;" title="{{ f.filename }}">
+                                                <i class="glyphicon glyphicon-time text-muted"></i>
+                                                {{ f.filename }}
+                                            </div>
                                         </td>
                                         <td>{{ f.file_type }}</td>
                                         <td>{{ format_file_size(f.file_size) }}</td>
-                                        <td>
-                                            {% if f.has_watermark %}
-                                            <span class="badge bg-success">已添加水印</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">已上传未添加水印</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-nowrap">{{ f.created_at.strftime('%m-%d %H:%M') if f.created_at else '' }}</td>
+                                        <td class="text-nowrap">{{ to_local_time(f.created_at, '%m-%d %H:%M') }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
+                        {{ render_pagination(user_unwatermarked_pagination, 'index', 'unwatermarked_page') }}
                         {% else %}
-                        <div class="text-muted">暂无文件</div>
+                        <div class="text-muted">暂无未添加水印的文件</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- 已添加水印的文件列表 -->
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-3 text-muted">已添加水印的文件</h6>
+                        {% if user_watermarked_pagination and user_watermarked_pagination.items %}
+                        <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
+                            <table class="table table-sm align-middle" style="table-layout: fixed;">
+                                <colgroup>
+                                    <col style="width:35%">
+                                    <col style="width:15%">
+                                    <col style="width:15%">
+                                    <col style="width:35%">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>文件名</th>
+                                        <th>类型</th>
+                                        <th>大小</th>
+                                        <th>时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for f in user_watermarked_pagination.items %}
+                                    <tr>
+                                        <td>
+                                            <div class="text-truncate" style="max-width: 100%;" title="{{ f.filename }}">
+                                                <i class="glyphicon glyphicon-ok text-success"></i>
+                                                {{ f.filename }}
+                                            </div>
+                                        </td>
+                                        <td>{{ f.file_type }}</td>
+                                        <td>{{ format_file_size(f.file_size) }}</td>
+                                        <td class="text-nowrap">{{ to_local_time(f.created_at, '%m-%d %H:%M') }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {{ render_pagination(user_watermarked_pagination, 'index', 'watermarked_page') }}
+                        {% else %}
+                        <div class="text-muted">暂无已添加水印的文件</div>
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
+        
         <div class="row g-3 mt-3">
             <div class="col-12">
                 <div class="card">
@@ -332,6 +375,32 @@
                 },
                 options: { responsive: true }
             });
+        }
+    })();
+    // 左右等高：让左侧 typesCard 的高度=右侧整体列的高度
+    (function() {
+        function syncLeftCardHeight() {
+            var left = document.getElementById('typesCard');
+            var right = document.getElementById('rightListsColumn');
+            if (!left || !right) return;
+            var h = right.offsetHeight;
+            if (h && h > 0) {
+                left.style.height = h + 'px';
+            }
+        }
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(syncLeftCardHeight, 0);
+        } else {
+            document.addEventListener('DOMContentLoaded', syncLeftCardHeight);
+        }
+        window.addEventListener('load', function(){ setTimeout(syncLeftCardHeight, 50); });
+        window.addEventListener('resize', function(){ setTimeout(syncLeftCardHeight, 50); });
+
+        // 观察右侧列的内容变化（分页、表格折叠等）
+        var right = document.getElementById('rightListsColumn');
+        if (right && 'MutationObserver' in window) {
+            var ob = new MutationObserver(function(){ syncLeftCardHeight(); });
+            ob.observe(right, { childList: true, subtree: true });
         }
     })();
 </script>

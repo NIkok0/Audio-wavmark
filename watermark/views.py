@@ -4,10 +4,11 @@ import mimetypes
 import os
 import re
 from datetime import datetime, timedelta
+from watermark.utils.time_provider import get_now_utc
 
 # Third-party imports
 from flask import (
-    abort, current_app, flash, jsonify, redirect, render_template,
+    abort, current_app, flash as flask_flash, jsonify, redirect, render_template,
     request, send_file, session, url_for
 )
 from flask_login import current_user, login_required, login_user, logout_user
@@ -24,6 +25,20 @@ from watermark.utils.algorithm_selector import AlgorithmSelector
 from watermark.utils.file_config import (
     get_file_size_info, get_file_type_by_extension, validate_file_size,format_file_size
 )
+
+# 统一封装 flash，记录触发位置，便于排查登录后首页出现的错误提示
+def flash(message, category='info'):
+    try:
+        user_id = getattr(current_user, 'id', None)
+        username = getattr(current_user, 'username', None)
+        current_app.logger.info(
+            'FLASH category=%s message=%s endpoint=%s path=%s referrer=%s user_id=%s username=%s',
+            category, str(message), request.endpoint, request.path, request.referrer, user_id, username
+        )
+    except Exception:
+        # 日志记录失败不影响原有逻辑
+        pass
+    return flask_flash(message, category)
 
 # 使用配置中的文件路径
 temp_dir = app.config['TEMP_FOLDER']
@@ -90,7 +105,7 @@ def handle_file_upload(file, media_type):
         os.makedirs(upload_path)
     
     # 生成唯一文件名
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = get_now_utc().strftime('%Y%m%d_%H%M%S')
     unique_filename = f"{timestamp}_{filename}"
     file_path = os.path.join(upload_path, unique_filename)
     
@@ -174,6 +189,58 @@ def get_user_files(user, file_type, has_watermark=None):
     # 按创建时间降序排序
     return query.order_by(File.created_at.desc()).all()
 
+def get_user_files_pagination(user, file_type, has_watermark=None, page=1, per_page=5):
+    """获取用户的文件列表（分页版本）"""
+    # 获取用户所在的组
+    user_group_ids = [group.id for group in user.groups]
+    
+    # 构建基本查询
+    query = File.query.filter_by(file_type=file_type)
+    
+    # 如果指定了水印状态，添加过滤条件
+    if has_watermark is not None:
+        query = query.filter_by(has_watermark=has_watermark)
+    
+    # 根据用户组或用户ID过滤
+    if user_group_ids:
+        query = query.filter(
+            (File.group_id.in_(user_group_ids)) |
+            (File.uploader_id == user.id)
+        )
+    else:
+        query = query.filter_by(uploader_id=user.id)
+    
+    # 按创建时间降序排序并分页
+    return query.order_by(File.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+def get_user_all_files_pagination(user, has_watermark=None, page=1, per_page=5):
+    """获取用户的文件列表（不区分类型，分页版本）
+
+    - 可见范围：本人上传 + 所在组文件
+    - 可按是否已添加水印过滤
+    - 创建时间倒序
+    """
+    user_group_ids = [group.id for group in user.groups]
+
+    query = File.query
+
+    if has_watermark is not None:
+        query = query.filter_by(has_watermark=has_watermark)
+
+    if user_group_ids:
+        query = query.filter(
+            (File.group_id.in_(user_group_ids)) |
+            (File.uploader_id == user.id)
+        )
+    else:
+        query = query.filter_by(uploader_id=user.id)
+
+    return query.order_by(File.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
 #主页
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -195,7 +262,7 @@ def index():
 
     # 最近14天按天统计
     days = 14
-    start_date = datetime.utcnow() - timedelta(days=days - 1)
+    start_date = get_now_utc() - timedelta(days=days - 1)
     grouped = (
         db.session.query(db.func.date(File.created_at).label('d'), db.func.count(File.id))
         .filter(File.created_at >= start_date)
@@ -260,6 +327,19 @@ def index():
             user_timeseries_labels.append(dday.strftime('%m-%d'))
             user_timeseries_counts.append(int(u_count_map.get(ukey, 0)))
 
+        # 首页个人文件分页（不区分类型）
+        unwatermarked_page = request.args.get('unwatermarked_page', 1, type=int)
+        watermarked_page = request.args.get('watermarked_page', 1, type=int)
+        user_unwatermarked_pagination = get_user_all_files_pagination(
+            current_user, has_watermark=False, page=unwatermarked_page, per_page=5
+        )
+        user_watermarked_pagination = get_user_all_files_pagination(
+            current_user, has_watermark=True, page=watermarked_page, per_page=5
+        )
+    else:
+        user_unwatermarked_pagination = None
+        user_watermarked_pagination = None
+
     return render_template(
         'index.html',
         total_files=total_files,
@@ -276,7 +356,9 @@ def index():
         user_type_labels=user_type_labels,
         user_type_values=user_type_values,
         user_timeseries_labels=user_timeseries_labels,
-        user_timeseries_counts=user_timeseries_counts
+        user_timeseries_counts=user_timeseries_counts,
+        user_unwatermarked_pagination=user_unwatermarked_pagination,
+        user_watermarked_pagination=user_watermarked_pagination
         , type_labels=type_labels
         , type_values=type_values
     )
@@ -553,9 +635,21 @@ def image_upload():
             'file_id': file_record.id
         })
     
-    # 获取用户的图片文件列表
-    files = get_user_files(current_user, 'image')
-    return render_template('image/upload.html', files=files)
+    # 获取用户的图片文件列表（分页，分未加水印/已加水印）
+    page = request.args.get('page', 1, type=int)
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'image', has_watermark=False, page=page, per_page=per_page
+    )
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'image', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    return render_template(
+        'image/upload.html',
+        unwatermarked_pagination=unwatermarked_pagination,
+        watermarked_pagination=watermarked_pagination
+    )
 
 @app.route('/image/add_watermark', methods=['GET', 'POST'])
 @login_required
@@ -632,10 +726,25 @@ def image_add_watermark():
         
         return redirect(url_for('image_add_watermark'))
     
-    # 获取当前用户的文件列表
-    files = get_user_files(current_user, 'image')
+    # 获取分页参数
+    page = request.args.get('page', 1, type=int)
+    per_page = 5  # 每页5条数据
     
-    return render_template('image/add_watermark.html', form=form, files=files)
+    # 获取未添加水印的文件
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'image', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件  
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'image', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    
+    return render_template('image/add_watermark.html', 
+                         form=form, 
+                         unwatermarked_pagination=unwatermarked_pagination,
+                         watermarked_pagination=watermarked_pagination)
 
 @app.route('/image/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -747,7 +856,7 @@ def audio_upload():
             return f'不支持的音频格式: {file_ext}', 400
             
         original_filename = secure_filename_with_chinese(f.filename)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = get_now_utc().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
         file_path = os.path.join(get_upload_path('audio'), unique_filename)
         
@@ -787,20 +896,21 @@ def audio_upload():
         except Exception as e:
             return jsonify({'error': f'上传失败: {str(e)}'}), 500
     
-    # 获取当前用户的文件列表
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'audio'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='audio'
-        ).order_by(File.created_at.desc()).all()
-    
-    return render_template('audio/upload.html', files=files)
+    # 获取用户的音频文件列表（分页，分未加水印/已加水印）
+    page = request.args.get('page', 1, type=int)
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'audio', has_watermark=False, page=page, per_page=per_page
+    )
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'audio', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    return render_template(
+        'audio/upload.html',
+        unwatermarked_pagination=unwatermarked_pagination,
+        watermarked_pagination=watermarked_pagination
+    )
 
 @app.route('/audio/add_watermark', methods=['GET', 'POST'])
 @login_required
@@ -877,10 +987,25 @@ def audio_add_watermark():
         
         return redirect(url_for('audio_add_watermark'))
     
-    # 获取当前用户的文件列表
-    files = get_user_files(current_user, 'audio')
+    # 获取分页参数
+    page = request.args.get('page', 1, type=int)
+    per_page = 5  # 每页5条数据
     
-    return render_template('audio/add_watermark.html', form=form, files=files)
+    # 获取未添加水印的文件
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'audio', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件  
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'audio', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    
+    return render_template('audio/add_watermark.html', 
+                         form=form, 
+                         unwatermarked_pagination=unwatermarked_pagination,
+                         watermarked_pagination=watermarked_pagination)
 
 @app.route('/audio/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -992,7 +1117,7 @@ def video_upload():
             return f'不支持的视频格式: {file_ext}', 400
             
         original_filename = secure_filename_with_chinese(f.filename)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = get_now_utc().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
         file_path = os.path.join(get_upload_path('video'), unique_filename)
         
@@ -1032,20 +1157,21 @@ def video_upload():
         except Exception as e:
             return jsonify({'error': f'上传失败: {str(e)}'}), 500
     
-    # 获取当前用户的文件列表
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'video'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='video'
-        ).order_by(File.created_at.desc()).all()
-    
-    return render_template('video/upload.html', files=files)
+    # 获取用户的视频文件列表（分页，分未加水印/已加水印）
+    page = request.args.get('page', 1, type=int)
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'video', has_watermark=False, page=page, per_page=per_page
+    )
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'video', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    return render_template(
+        'video/upload.html',
+        unwatermarked_pagination=unwatermarked_pagination,
+        watermarked_pagination=watermarked_pagination
+    )
 
 @app.route('/video/add_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1122,10 +1248,25 @@ def video_add_watermark():
         
         return redirect(url_for('video_add_watermark'))
     
-    # 获取当前用户的文件列表
-    files = get_user_files(current_user, 'video')
+    # 获取分页参数
+    page = request.args.get('page', 1, type=int)
+    per_page = 5  # 每页5条数据
     
-    return render_template('video/add_watermark.html', form=form, files=files)
+    # 获取未添加水印的文件
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'video', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件  
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'video', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    
+    return render_template('video/add_watermark.html', 
+                         form=form, 
+                         unwatermarked_pagination=unwatermarked_pagination,
+                         watermarked_pagination=watermarked_pagination)
 
 @app.route('/video/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1237,7 +1378,7 @@ def text_upload():
             return f'不支持的文档格式: {file_ext}', 400
             
         original_filename = secure_filename_with_chinese(f.filename)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = get_now_utc().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
         file_path = os.path.join(get_upload_path('text'), unique_filename)
         
@@ -1277,20 +1418,21 @@ def text_upload():
         except Exception as e:
             return jsonify({'error': f'上传失败: {str(e)}'}), 500
     
-    # 获取当前用户的文件列表
-    user_group_ids = [group.id for group in current_user.groups]
-    if user_group_ids:
-        files = File.query.filter(
-            File.group_id.in_(user_group_ids),
-            File.file_type == 'text'
-        ).order_by(File.created_at.desc()).all()
-    else:
-        files = File.query.filter_by(
-            uploader_id=current_user.id,
-            file_type='text'
-        ).order_by(File.created_at.desc()).all()
-    
-    return render_template('text/upload.html', files=files)
+    # 获取用户的文本文件列表（分页，分未加水印/已加水印）
+    page = request.args.get('page', 1, type=int)
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'text', has_watermark=False, page=page, per_page=per_page
+    )
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'text', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    return render_template(
+        'text/upload.html',
+        unwatermarked_pagination=unwatermarked_pagination,
+        watermarked_pagination=watermarked_pagination
+    )
 
 @app.route('/text/add_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1367,10 +1509,25 @@ def text_add_watermark():
         
         return redirect(url_for('text_add_watermark'))
     
-    # 获取当前用户的文件列表
-    files = get_user_files(current_user, 'text')
+    # 获取分页参数
+    page = request.args.get('page', 1, type=int)
+    per_page = 5  # 每页5条数据
     
-    return render_template('text/add_watermark.html', form=form, files=files)
+    # 获取未添加水印的文件
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'text', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件  
+    watermarked_page = request.args.get('watermarked_page', 1, type=int)
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'text', has_watermark=True, page=watermarked_page, per_page=per_page
+    )
+    
+    return render_template('text/add_watermark.html', 
+                         form=form, 
+                         unwatermarked_pagination=unwatermarked_pagination,
+                         watermarked_pagination=watermarked_pagination)
 
 @app.route('/text/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1460,3 +1617,197 @@ def text_extract_from_file(file_id):
         'success': True,
         'extracted_text': extracted_text
     })
+
+@app.route('/batch_delete', methods=['POST'])
+@login_required
+def batch_delete():
+    """批量删除文件"""
+    file_ids_str = request.form.get('file_ids', '')
+    if not file_ids_str:
+        flash("没有选择要删除的文件")
+        return redirect(request.referrer or url_for('index'))
+    
+    try:
+        file_ids = [int(id.strip()) for id in file_ids_str.split(',') if id.strip()]
+        if not file_ids:
+            flash("没有选择要删除的文件")
+            return redirect(request.referrer or url_for('index'))
+        
+        # 查询用户有权限删除的文件
+        files = File.query.filter(
+            File.id.in_(file_ids),
+            File.uploader_id == current_user.id
+        ).all()
+        
+        if not files:
+            flash("没有找到可删除的文件")
+            return redirect(request.referrer or url_for('index'))
+        
+        success_count = 0
+        error_count = 0
+        
+        for file in files:
+            try:
+                # 删除原始文件
+                if file.original_path and os.path.exists(file.original_path):
+                    os.remove(file.original_path)
+                
+                # 删除水印文件
+                if file.watermarked_path and os.path.exists(file.watermarked_path):
+                    os.remove(file.watermarked_path)
+                
+                # 从数据库删除记录
+                db.session.delete(file)
+                success_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                print(f"删除文件 {file.filename} 时发生错误: {str(e)}")
+        
+        db.session.commit()
+        
+        if success_count > 0:
+            flash(f"成功删除 {success_count} 个文件")
+        if error_count > 0:
+            flash(f"删除失败 {error_count} 个文件")
+            
+    except Exception as e:
+        flash(f"批量删除操作失败: {str(e)}")
+    
+    return redirect(request.referrer or url_for('index'))
+
+@app.route('/batch_download', methods=['POST'])
+@login_required  
+def batch_download():
+    """批量下载文件"""
+    import zipfile
+    import tempfile
+    from flask import make_response
+    
+    file_ids_str = request.form.get('file_ids', '')
+    if not file_ids_str:
+        flash("没有选择要下载的文件")
+        return redirect(request.referrer or url_for('index'))
+    
+    try:
+        file_ids = [int(id.strip()) for id in file_ids_str.split(',') if id.strip()]
+        if not file_ids:
+            flash("没有选择要下载的文件")
+            return redirect(request.referrer or url_for('index'))
+        
+        # 查询用户有权限下载的文件
+        files = File.query.filter(
+            File.id.in_(file_ids),
+            File.uploader_id == current_user.id,
+            File.has_watermark == True  # 只下载已添加水印的文件
+        ).all()
+        
+        if not files:
+            flash("没有找到可下载的文件")
+            return redirect(request.referrer or url_for('index'))
+        
+        # 创建临时ZIP文件
+        temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        temp_zip.close()
+        
+        with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file in files:
+                if file.watermarked_path and os.path.exists(file.watermarked_path):
+                    # 使用原始文件名作为ZIP内的文件名
+                    zip_file.write(file.watermarked_path, file.filename)
+        
+        # 读取ZIP文件内容
+        with open(temp_zip.name, 'rb') as f:
+            zip_data = f.read()
+        
+        # 删除临时文件
+        os.unlink(temp_zip.name)
+        
+        # 创建响应
+        response = make_response(zip_data)
+        response.headers['Content-Type'] = 'application/zip'
+        response.headers['Content-Disposition'] = f'attachment; filename=watermarked_files_{get_now_utc().strftime("%Y%m%d_%H%M%S")}.zip'
+        
+        return response
+        
+    except Exception as e:
+        flash(f"批量下载操作失败: {str(e)}")
+        return redirect(request.referrer or url_for('index'))
+
+# -----------------------------
+# 全局错误处理
+# -----------------------------
+
+@app.errorhandler(404)
+def handle_404_error(error):
+    """全局 404 错误处理：根据请求头返回 HTML 或 JSON。"""
+    accepts_json = (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes['application/json'] >= request.accept_mimetypes['text/html']
+    )
+    if accepts_json:
+        return jsonify({
+            'error': 'Not Found',
+            'message': '您访问的资源不存在',
+            'code': 404
+        }), 404
+    return render_template('404.html'), 404
+
+
+@app.errorhandler(500)
+def handle_500_error(error):
+    """全局 500 错误处理：记录异常并根据需要返回 JSON 或 HTML。"""
+    try:
+        current_app.logger.exception('Unhandled Exception: %s', error)
+    except Exception:
+        pass
+
+    accepts_json = (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.accept_mimetypes['application/json'] >= request.accept_mimetypes['text/html']
+    )
+    if accepts_json:
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': '服务器内部错误，请稍后重试',
+            'code': 500
+        }), 500
+    return render_template('500.html'), 500
+
+# -----------------------------
+# 文件搜索
+# -----------------------------
+
+@app.route('/search', methods=['GET'])
+@login_required
+def search():
+    """按文件名模糊搜索，显示用户有权限查看的文件（本人 + 组）。"""
+    query_text = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
+    files_pagination = None
+    if query_text:
+        user_group_ids = [group.id for group in current_user.groups]
+        base_query = File.query.filter(
+            File.filename.like(f"%{query_text}%")
+        )
+        if user_group_ids:
+            base_query = base_query.filter(
+                (File.group_id.in_(user_group_ids)) | (File.uploader_id == current_user.id)
+            )
+        else:
+            base_query = base_query.filter(File.uploader_id == current_user.id)
+
+        files_pagination = base_query.order_by(File.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+
+    return render_template(
+        'search_results.html',
+        q=query_text,
+        files_pagination=files_pagination,
+        format_file_size=format_file_size
+    )

@@ -6,6 +6,7 @@ from flask_login import UserMixin
 
 # Local imports
 from watermark import db
+from watermark.utils.time_provider import get_now_utc
 
 # 1. 用户-组 多对多关联表
 user_group_rel = db.Table('user_group_rel',
@@ -38,7 +39,7 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
     description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_now_utc)
 
     # 关系
     users = db.relationship("User", secondary=user_group_rel, back_populates="groups")
@@ -59,15 +60,17 @@ class File(db.Model):
     file_size = db.Column(db.BigInteger, nullable=False)
     mime_type = db.Column(db.String(100), nullable=False)
     watermark_type = db.Column(db.String(50), nullable=True)
-    watermark_text = db.Column(db.Text, nullable=True)
+    watermark_text = db.Column(db.Text, nullable=True)  
+    original_watermark_text = db.Column(db.Text, nullable=True)  # 存储原始水印文本
+    watermark_seed = db.Column(db.String(20), nullable=True)  # 存储随机种子
     processing_status = db.Column(db.String(20), default='pending')  # pending/completed/failed
     error_message = db.Column(db.Text, nullable=True)
 
     uploader_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_now_utc)
+    updated_at = db.Column(db.DateTime, default=get_now_utc, onupdate=get_now_utc)
 
     # 关系
     uploader = db.relationship("User", back_populates="uploaded_files")

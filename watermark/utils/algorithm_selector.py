@@ -6,7 +6,7 @@ from watermark.utils.file_config import (
     get_file_type_by_extension
 )
 from watermark.utils import watermark_image, watermark_video, watermark_audio, watermark_text
-
+from watermark.utils.watermark_video import text_to_6char_hash
 class AlgorithmSelector:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class AlgorithmSelector:
             "text": watermark_text
         }
     
-    def select_algorithm(self, file_path, watermark_text):
+    def select_algorithm(self, file_path, watermark_text,random_seed=None):
         """智能选择算法进行水印嵌入"""
         # 获取文件后缀
         _, extension = os.path.splitext(file_path)
@@ -52,18 +52,29 @@ class AlgorithmSelector:
         for algorithm in algorithms_to_try:
             try:
                 self.logger.info(f"尝试使用算法 {algorithm} 处理文件 {file_path}")
-                
-                result = self._try_algorithm(algorithm, file_path, watermark_text)
-                
-                if result:
-                    self.logger.info(f"算法 {algorithm} 处理成功")
-                    return {
-                        'success': True,
-                        'algorithm': algorithm,
-                        'result': result
-                    }
+                if random_seed:
+                    result,watermark_hash = self._try_algorithm(algorithm, file_path, watermark_text,random_seed)
+                    if result:
+                        self.logger.info(f"算法 {algorithm} 处理成功")
+                        return {
+                            'success': True,
+                            'algorithm': algorithm,
+                            'result': result,
+                            'watermark_hash': watermark_hash
+                        }
+                    else:
+                        self.logger.warning(f"算法 {algorithm} 处理失败，结果无效")
                 else:
-                    self.logger.warning(f"算法 {algorithm} 处理失败，结果无效")
+                    result = self._try_algorithm(algorithm, file_path, watermark_text)
+                    if result:
+                        self.logger.info(f"算法 {algorithm} 处理成功")
+                        return {
+                            'success': True,
+                            'algorithm': algorithm,
+                            'result': result
+                        }
+                    else:
+                        self.logger.warning(f"算法 {algorithm} 处理失败，结果无效")
                     
             except Exception as e:
                 self.logger.error(f"算法 {algorithm} 处理出错: {str(e)}")
@@ -72,7 +83,7 @@ class AlgorithmSelector:
         # 所有算法都失败了
         raise Exception(f"所有可用算法都无法处理该文件")
     
-    def _try_algorithm(self, algorithm, file_path, watermark_text):
+    def _try_algorithm(self, algorithm, file_path, watermark_text,random_seed=None):
         """尝试使用指定算法处理文件"""
         # 获取文件类型
         _, extension = os.path.splitext(file_path)
@@ -90,13 +101,14 @@ class AlgorithmSelector:
 
         # 动态获取embed函数并调用
         embed_func = getattr(module, "embed")
-        
-        # 调用嵌入水印函数
-        result = embed_func(file_path, watermark_text, algorithm)
+        if random_seed:
+            result,watermark_hash = embed_func(file_path, watermark_text, algorithm,random_seed)
+            return result,watermark_hash
+        else:
+            result = embed_func(file_path, watermark_text, algorithm)
+            return result
 
-        return result
-
-    def extract_watermark(self, file_path, algorithm=None):
+    def extract_watermark(self, file_path, algorithm=None,watermark_seed=None,watermark_text=None,original_watermark_text=None):
         """提取水印"""
         # 获取文件后缀和类型
         _, extension = os.path.splitext(file_path)
@@ -115,17 +127,14 @@ class AlgorithmSelector:
 
         # 3. 动态获取extract函数并调用
         extract_func = getattr(module, "extract")
-        
-        # 4. 调用提取水印函数
-        if algorithm:
-            # 指定了算法：调用 extract_func(输入文件, 算法名称)
-            result = extract_func(file_path, algorithm)
+        if watermark_seed:
+            watermark_hash_after = extract_func(file_path, algorithm)
+            if str(watermark_hash_after) != str(watermark_text):
+                raise ValueError("水印hash不匹配")
+            return original_watermark_text
         else:
-            # 未指定算法：使用该文件后缀的默认算法
-            default_algorithm = get_default_algorithm(extension)
-            result = extract_func(file_path, default_algorithm)
-        
-        return result
+            result = extract_func(file_path, algorithm)
+            return result
 
 
 

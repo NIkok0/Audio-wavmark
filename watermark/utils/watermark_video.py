@@ -4,6 +4,8 @@ import subprocess as sp
 import numpy as np
 import wave
 from flask import current_app
+import hashlib
+
 # Third-party imports
 
 import os
@@ -17,8 +19,44 @@ from . import videoseal
 from .videoseal.models import Videoseal
 from .videoseal.evals.metrics import bit_accuracy
 
-def embed(input_file, watermark, algorithm):
+def text_to_6char_hash(text,random_seed):
+    """
+    将任意长度的文本转换为6位字符的hash值
+    使用随机数种子拼接后进行SHA256 hash，然后截取前6位
+    
+    Args:
+        text (str): 输入的任意文本
+        
+    Returns:
+        str: 6位字符的hash值
+    """
+    # 生成随机数种子（8位数字）
+    
+    
+    # 将文本与随机数种子拼接
+    text_with_seed = f"{text}{random_seed}"
+    
+    # 使用SHA256算法生成hash
+    hash_obj = hashlib.sha256(text_with_seed.encode('utf-8'))
+    hash_hex = hash_obj.hexdigest()
+    
+    # 截取前6位字符并转换为大写
+    result_hash = hash_hex[:6].upper()
+    
+    print(f"随机种子: {random_seed}")
+    print(f"拼接后文本: {text_with_seed}")
+    print(f"SHA256 hash (前6位): {result_hash}")
+    
+    return result_hash
+
+
+def embed(input_file, watermark, algorithm,random_seed):
     """视频水印嵌入 - 负责算法调用和文件保存"""
+    
+    # 将输入的水印文本转换为6位hash值
+    watermark_hash = text_to_6char_hash(watermark,random_seed)
+    print(f"原始水印文本: {watermark}")
+    print(f"转换后的6位hash: {watermark_hash}")
     
     # 获取文件扩展名
     _, extension = os.path.splitext(input_file)
@@ -33,8 +71,8 @@ def embed(input_file, watermark, algorithm):
         if embed_function is None:
             raise ValueError(f"视频水印算法 {algorithm} 不支持 {extension} 格式")
         
-        # 调用算法，获取处理后的视频对象
-        processed_video = embed_function(input_file, watermark)
+        # 调用算法，使用转换后的hash值
+        processed_video = embed_function(input_file, watermark_hash)
         
         
         # 文件保存逻辑
@@ -51,7 +89,8 @@ def embed(input_file, watermark, algorithm):
         if os.path.exists(processed_video) and processed_video != full_path:
             os.rename(processed_video, full_path)
         
-        return full_path  # 返回完整路径
+        # 返回文件路径、hash值和种子
+        return full_path, watermark_hash
         
     except Exception as e:
         print(f"视频水印算法 {algorithm} 失败: {str(e)}")
@@ -144,7 +183,12 @@ def bit_tensor_to_string(bits: torch.Tensor, max_chars: int = 32) -> str:
         if len(byte) < 8:
             break  # Not enough bits for a full character
         byte_str = ''.join(map(str, byte))
-        chars.append(chr(int(byte_str, 2)))
+        char_code = int(byte_str, 2)
+        # 只保留可打印的ASCII字符，跳过null字符和控制字符
+        if char_code >= 32 and char_code <= 126:  # 可打印ASCII范围
+            chars.append(chr(char_code))
+        elif char_code == 0:  # 遇到null字符时停止
+            break
     return ''.join(chars)
 
 
