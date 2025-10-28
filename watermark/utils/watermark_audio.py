@@ -3,6 +3,7 @@ import numpy as np
 from scipy.io import wavfile
 import wave
 from flask import current_app
+from watermark.utils.path_utils import get_user_dated_embed_dir
 
 # 添加算法时前三个函数不用动，是自动调用的
 import sys
@@ -219,8 +220,8 @@ def embed(input_file, watermark, algorithm):
         name_without_ext = os.path.splitext(original_name)[0]
         filename = f"{name_without_ext}_embed.{extension}"
         
-        # 从app.config获取保存路径
-        embed_dir = current_app.config['MEDIA_FOLDERS']['audio']['embed']
+        # 从app.config获取保存路径 - 使用用户日期分层路径
+        embed_dir = get_user_dated_embed_dir('audio')
         full_path = os.path.join(embed_dir, filename)
 
         # 调用算法，获取处理后的音频数据

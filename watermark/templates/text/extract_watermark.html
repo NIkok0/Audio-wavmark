@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "bootstrap/wtf.html" as wtf %}
+{% from "macros/pagination.html" import render_pagination %}
 
 {% block title %}提取文本水印 - 数字水印系统{% endblock %}
 
@@ -249,7 +250,7 @@
     </div>
 
     <!-- 批量操作 -->
-    {% if files %}
+    {% if watermarked_pagination.items %}
     <div class="batch-actions">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
@@ -262,6 +263,9 @@
                 <button type="button" class="btn btn-primary btn-sm" onclick="extractWatermarkFromSelected()" id="extractWatermarkBtn" disabled>
                     <i class="glyphicon glyphicon-search"></i> 提取水印！
                 </button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedFiles()" id="deleteSelectedBtn" disabled>
+                    <i class="glyphicon glyphicon-trash"></i> 批量删除
+                </button>
             </div>
         </div>
     </div>
@@ -270,9 +274,9 @@
     <!-- 显示用户的已添加水印的文件列表 -->
     <div class="main-section">
         <h3 class="section-title"><i class="glyphicon glyphicon-ok-circle"></i> 您的已添加水印的文件</h3>
-        {% if files %}
+        {% if watermarked_pagination.items %}
         <div class="file-list">
-            {% for file in files %}
+            {% for file in watermarked_pagination.items %}
             <div class="file-item" data-file-id="{{ file.id }}">
                 <div class="file-info">
                     <label style="margin: 0; cursor: pointer;">
@@ -309,6 +313,7 @@
             </div>
             {% endfor %}
         </div>
+        {{ render_pagination(watermarked_pagination, 'text_extract_watermark', 'page') }}
         {% else %}
         <div class="empty-list">
             <p><i class="glyphicon glyphicon-info-sign"></i> 暂无已添加水印的文件</p>
@@ -405,6 +410,7 @@
         var totalCount = allCheckboxes.length;
         var selectedCount = document.getElementById('selectedCount');
         var extractWatermarkBtn = document.getElementById('extractWatermarkBtn');
+        var deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
         var selectAll = document.getElementById('selectAll');
         
         // 更新选中数量显示
@@ -424,9 +430,42 @@
         
         // 更新按钮状态
         extractWatermarkBtn.disabled = count === 0;
+        if (deleteSelectedBtn) deleteSelectedBtn.disabled = count === 0;
         
         // 更新选中文件列表
         selectedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    }
+
+    // 批量删除
+    function deleteSelectedFiles() {
+        if (selectedFiles.length === 0) {
+            showNotification('请先选择要删除的文件', 'warning');
+            return;
+        }
+        if (!confirm('确定要删除选中的 ' + selectedFiles.length + ' 个文件吗？此操作不可撤销！')) {
+            return;
+        }
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/batch_delete';
+
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'file_ids';
+        input.value = selectedFiles.join(',');
+        form.appendChild(input);
+
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (csrfToken) {
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.value;
+            form.appendChild(csrfInput);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
     }
 
     // 提取单个文件的水印

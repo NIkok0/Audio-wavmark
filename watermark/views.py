@@ -56,6 +56,12 @@ def get_embed_path(media_type):
     """获取指定媒体类型的嵌入路径"""
     return app.config['MEDIA_FOLDERS'][media_type]['embed']
 
+from watermark.utils.path_utils import (
+    get_user_dated_upload_dir,
+    get_user_dated_embed_dir,
+    get_user_dated_extract_dir,
+)
+
 def secure_filename_with_chinese(filename):
     """支持中文的安全文件名处理函数"""
     # 分离文件名和扩展名
@@ -99,10 +105,8 @@ def handle_file_upload(file, media_type):
         max_size = size_info['max_size'] if size_info else "未知"
         return None, f"文件大小超过限制 (最大: {format_file_size(max_size)})"
     
-    # 获取上传路径
-    upload_path = get_upload_path(media_type)
-    if not os.path.exists(upload_path):
-        os.makedirs(upload_path)
+    # 获取按 用户名/日期 的上传路径
+    upload_path = get_user_dated_upload_dir(media_type)
     
     # 生成唯一文件名
     timestamp = get_now_utc().strftime('%Y%m%d_%H%M%S')
@@ -563,32 +567,32 @@ def clear_all_extract_results():
     
     return redirect(request.referrer)
 
-# 计算相似度
-def calculate_similarity(str1, str2):
-    """计算两个字符串的相似度"""
-    def levenshtein_distance(s1, s2):
-        if len(s1) < len(s2):
-            return levenshtein_distance(s2, s1)
-        if len(s2) == 0:
-            return len(s1)
-        previous_row = list(range(len(s2) + 1))
-        for i, c1 in enumerate(s1):
-            current_row = [i + 1]
-            for j, c2 in enumerate(s2):
-                insertions = previous_row[j + 1] + 1
-                deletions = current_row[j] + 1
-                substitutions = previous_row[j] + (c1 != c2)
-                current_row.append(min(insertions, deletions, substitutions))
-            previous_row = current_row
-        return previous_row[-1]
+# # 计算相似度
+# def calculate_similarity(str1, str2):
+#     """计算两个字符串的相似度"""
+#     def levenshtein_distance(s1, s2):
+#         if len(s1) < len(s2):
+#             return levenshtein_distance(s2, s1)
+#         if len(s2) == 0:
+#             return len(s1)
+#         previous_row = list(range(len(s2) + 1))
+#         for i, c1 in enumerate(s1):
+#             current_row = [i + 1]
+#             for j, c2 in enumerate(s2):
+#                 insertions = previous_row[j + 1] + 1
+#                 deletions = current_row[j] + 1
+#                 substitutions = previous_row[j] + (c1 != c2)
+#                 current_row.append(min(insertions, deletions, substitutions))
+#             previous_row = current_row
+#         return previous_row[-1]
     
-    if not str1 or not str2:
-        return 0.0
+#     if not str1 or not str2:
+#         return 0.0
     
-    distance = levenshtein_distance(str1, str2)
-    max_len = max(len(str1), len(str2))
-    similarity = 1 - (distance / max_len)
-    return similarity
+#     distance = levenshtein_distance(str1, str2)
+#     max_len = max(len(str1), len(str2))
+#     similarity = 1 - (distance / max_len)
+#     return similarity
 
 # 图片处理相关路由
 @app.route('/image/process')
@@ -607,7 +611,7 @@ def image_upload():
         if file.filename == '':
             return jsonify({'error': '没有选择文件'})
         
-        # 使用通用文件上传处理函数
+        # 使用通用文件上传处理函数（已按 用户名/日期 归档）
         file_path, error, file_info = handle_file_upload(file, 'image')
         if error:
             return jsonify({'error': error})
@@ -659,31 +663,27 @@ def image_add_watermark():
         # 获取选中的文件ID
         selected_file_ids = request.form.get('selected_file_ids', '')
         
-        if selected_file_ids:
-            # 处理选中的文件
-            file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
-            files = File.query.filter(
-                File.id.in_(file_ids),
-                File.uploader_id == current_user.id,
-                File.file_type == 'image',
-                File.has_watermark == False
-            ).all()
-        else:
-            # 处理所有未添加水印的文件
-            user_group_ids = [group.id for group in current_user.groups]
-            
-            if user_group_ids:
-                files = File.query.filter(
-                    File.group_id.in_(user_group_ids),
-                    File.has_watermark == False,
-                    File.file_type == 'image'
-                ).all()
-            else:
-                files = File.query.filter_by(
-                    uploader_id=current_user.id,
-                    has_watermark=False,
-                    file_type='image'
-                ).all()
+        if not selected_file_ids or not selected_file_ids.strip():
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('image_add_watermark'))
+        
+        # 处理选中的文件
+        file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
+        
+        if not file_ids:
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('image_add_watermark'))
+        
+        files = File.query.filter(
+            File.id.in_(file_ids),
+            File.uploader_id == current_user.id,
+            File.file_type == 'image',
+            File.has_watermark == False
+        ).all()
+        
+        if not files:
+            flash('未找到可处理的文件', 'error')
+            return redirect(url_for('image_add_watermark'))
         
         success_count = 0
         error_count = 0
@@ -802,13 +802,17 @@ def image_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表
-    files = get_user_files(current_user, 'image', has_watermark=True)
+    # 获取已添加水印的文件列表（分页）
+    page = request.args.get('page', 1, type=int)
+    per_page = 5
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'image', has_watermark=True, page=page, per_page=per_page
+    )
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('image/extract_watermark.html',
-                         files=files,
+                         watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
 @app.route('/image/extract_from_file/<int:file_id>')
@@ -858,7 +862,9 @@ def audio_upload():
         original_filename = secure_filename_with_chinese(f.filename)
         timestamp = get_now_utc().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
-        file_path = os.path.join(get_upload_path('audio'), unique_filename)
+        # 保存到 用户名/日期 目录
+        upload_dir = get_user_dated_upload_dir('audio')
+        file_path = os.path.join(upload_dir, unique_filename)
         
         try:
             f.save(file_path)
@@ -920,31 +926,27 @@ def audio_add_watermark():
         # 获取选中的文件ID
         selected_file_ids = request.form.get('selected_file_ids', '')
         
-        if selected_file_ids:
-            # 处理选中的文件
-            file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
-            files = File.query.filter(
-                File.id.in_(file_ids),
-                File.uploader_id == current_user.id,
-                File.file_type == 'audio',
-                File.has_watermark == False
-            ).all()
-        else:
-            # 处理所有未添加水印的文件
-            user_group_ids = [group.id for group in current_user.groups]
-            
-            if user_group_ids:
-                files = File.query.filter(
-                    File.group_id.in_(user_group_ids),
-                    File.has_watermark == False,
-                    File.file_type == 'audio'
-                ).all()
-            else:
-                files = File.query.filter_by(
-                    uploader_id=current_user.id,
-                    has_watermark=False,
-                    file_type='audio'
-                ).all()
+        if not selected_file_ids or not selected_file_ids.strip():
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('audio_add_watermark'))
+        
+        # 处理选中的文件
+        file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
+        
+        if not file_ids:
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('audio_add_watermark'))
+        
+        files = File.query.filter(
+            File.id.in_(file_ids),
+            File.uploader_id == current_user.id,
+            File.file_type == 'audio',
+            File.has_watermark == False
+        ).all()
+        
+        if not files:
+            flash('未找到可处理的文件', 'error')
+            return redirect(url_for('audio_add_watermark'))
         
         success_count = 0
         error_count = 0
@@ -1063,13 +1065,17 @@ def audio_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表
-    files = get_user_files(current_user, 'audio', has_watermark=True)
+    # 获取已添加水印的文件列表（分页）
+    page = request.args.get('page', 1, type=int)
+    per_page = 5
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'audio', has_watermark=True, page=page, per_page=per_page
+    )
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('audio/extract_watermark.html',
-                         files=files,
+                         watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
 @app.route('/audio/extract_from_file/<int:file_id>')
@@ -1119,7 +1125,9 @@ def video_upload():
         original_filename = secure_filename_with_chinese(f.filename)
         timestamp = get_now_utc().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
-        file_path = os.path.join(get_upload_path('video'), unique_filename)
+        # 保存到 用户名/日期 目录
+        upload_dir = get_user_dated_upload_dir('video')
+        file_path = os.path.join(upload_dir, unique_filename)
         
         try:
             f.save(file_path)
@@ -1181,31 +1189,27 @@ def video_add_watermark():
         # 获取选中的文件ID
         selected_file_ids = request.form.get('selected_file_ids', '')
         
-        if selected_file_ids:
-            # 处理选中的文件
-            file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
-            files = File.query.filter(
-                File.id.in_(file_ids),
-                File.uploader_id == current_user.id,
-                File.file_type == 'video',
-                File.has_watermark == False
-            ).all()
-        else:
-            # 处理所有未添加水印的文件
-            user_group_ids = [group.id for group in current_user.groups]
-            
-            if user_group_ids:
-                files = File.query.filter(
-                    File.group_id.in_(user_group_ids),
-                    File.has_watermark == False,
-                    File.file_type == 'video'
-                ).all()
-            else:
-                files = File.query.filter_by(
-                    uploader_id=current_user.id,
-                    has_watermark=False,
-                    file_type='video'
-                ).all()
+        if not selected_file_ids or not selected_file_ids.strip():
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('video_add_watermark'))
+        
+        # 处理选中的文件
+        file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
+        
+        if not file_ids:
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('video_add_watermark'))
+        
+        files = File.query.filter(
+            File.id.in_(file_ids),
+            File.uploader_id == current_user.id,
+            File.file_type == 'video',
+            File.has_watermark == False
+        ).all()
+        
+        if not files:
+            flash('未找到可处理的文件', 'error')
+            return redirect(url_for('video_add_watermark'))
         
         success_count = 0
         error_count = 0
@@ -1324,13 +1328,17 @@ def video_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表
-    files = get_user_files(current_user, 'video', has_watermark=True)
+    # 获取已添加水印的文件列表（分页）
+    page = request.args.get('page', 1, type=int)
+    per_page = 5
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'video', has_watermark=True, page=page, per_page=per_page
+    )
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('video/extract_watermark.html',
-                         files=files,
+                         watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
 @app.route('/video/extract_from_file/<int:file_id>')
@@ -1380,7 +1388,9 @@ def text_upload():
         original_filename = secure_filename_with_chinese(f.filename)
         timestamp = get_now_utc().strftime("%Y%m%d_%H%M%S")
         unique_filename = f"{current_user.id}_{timestamp}_{original_filename}"
-        file_path = os.path.join(get_upload_path('text'), unique_filename)
+        # 保存到 用户名/日期 目录
+        upload_dir = get_user_dated_upload_dir('text')
+        file_path = os.path.join(upload_dir, unique_filename)
         
         try:
             f.save(file_path)
@@ -1442,31 +1452,27 @@ def text_add_watermark():
         # 获取选中的文件ID
         selected_file_ids = request.form.get('selected_file_ids', '')
         
-        if selected_file_ids:
-            # 处理选中的文件
-            file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
-            files = File.query.filter(
-                File.id.in_(file_ids),
-                File.uploader_id == current_user.id,
-                File.file_type == 'text',
-                File.has_watermark == False
-            ).all()
-        else:
-            # 处理所有未添加水印的文件
-            user_group_ids = [group.id for group in current_user.groups]
-            
-            if user_group_ids:
-                files = File.query.filter(
-                    File.group_id.in_(user_group_ids),
-                    File.has_watermark == False,
-                    File.file_type == 'text'
-                ).all()
-            else:
-                files = File.query.filter_by(
-                    uploader_id=current_user.id,
-                    has_watermark=False,
-                    file_type='text'
-                ).all()
+        if not selected_file_ids or not selected_file_ids.strip():
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('text_add_watermark'))
+        
+        # 处理选中的文件
+        file_ids = [int(id.strip()) for id in selected_file_ids.split(',') if id.strip()]
+        
+        if not file_ids:
+            flash('请先选择要添加水印的文件', 'error')
+            return redirect(url_for('text_add_watermark'))
+        
+        files = File.query.filter(
+            File.id.in_(file_ids),
+            File.uploader_id == current_user.id,
+            File.file_type == 'text',
+            File.has_watermark == False
+        ).all()
+        
+        if not files:
+            flash('未找到可处理的文件', 'error')
+            return redirect(url_for('text_add_watermark'))
         
         success_count = 0
         error_count = 0
@@ -1585,13 +1591,17 @@ def text_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表
-    files = get_user_files(current_user, 'text', has_watermark=True)
+    # 获取已添加水印的文件列表（分页）
+    page = request.args.get('page', 1, type=int)
+    per_page = 5
+    watermarked_pagination = get_user_files_pagination(
+        current_user, 'text', has_watermark=True, page=page, per_page=per_page
+    )
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('text/extract_watermark.html',
-                         files=files,
+                         watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
 @app.route('/text/extract_from_file/<int:file_id>')

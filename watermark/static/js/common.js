@@ -97,6 +97,29 @@
         },
         alertDanger: function(message) {
             insertAlert(message, 'danger');
+        },
+        alertWarning: function(message) {
+            insertAlert(message, 'warning');
+        }
+    };
+
+    // 统一提示方法
+    window.showNotification = function(message, type) {
+        try {
+            switch ((type || 'info').toLowerCase()) {
+                case 'success':
+                    AppLoading.alertSuccess(message); break;
+                case 'danger':
+                case 'error':
+                    AppLoading.alertDanger(message); break;
+                case 'warning':
+                    AppLoading.alertWarning(message); break;
+                default:
+                    AppLoading.alertInfo(message); break;
+            }
+        } catch (e) {
+            // 兜底
+            console && console.warn && console.warn('showNotification fallback:', e);
         }
     };
 
@@ -105,8 +128,11 @@
         try {
             var forms = document.querySelectorAll('.watermark-form form, form.needs-loading');
             forms.forEach(function(form) {
-                form.addEventListener('submit', function() {
+                form.addEventListener('submit', function(e) {
                     try {
+                        if (e && e.defaultPrevented) {
+                            return; // 前端验证已阻止，不显示“处理中”
+                        }
                         var key = 'lastActionStart:' + (location.pathname || '');
                         sessionStorage.setItem(key, String(Date.now()));
                     } catch (e) {}

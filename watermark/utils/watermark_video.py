@@ -7,6 +7,7 @@ from flask import current_app
 import hashlib
 
 # Third-party imports
+from watermark.utils.path_utils import get_user_dated_embed_dir
 
 import os
 import ffmpeg
@@ -80,8 +81,8 @@ def embed(input_file, watermark, algorithm,random_seed):
         name_without_ext = os.path.splitext(original_name)[0]
         filename = f"{name_without_ext}_embed.{extension}"
         
-        # 从app.config获取保存路径
-        embed_dir = current_app.config['MEDIA_FOLDERS']['video']['embed']
+        # 从app.config获取保存路径 - 使用用户日期分层路径
+        embed_dir = get_user_dated_embed_dir('video')
         full_path = os.path.join(embed_dir, filename)
         
         # 保存文件 - 在这种情况下，processed_video已经是保存好的文件路径
@@ -123,7 +124,7 @@ def embed_mp4_dct(input_file, watermark):
     print("video_watermark_embed for MP4!")
     class Args:
         input = input_file
-        output = current_app.config['MEDIA_FOLDERS']['video']['embed']
+        output = get_user_dated_embed_dir('video')
 
     args = Args()
     os.makedirs(args.output, exist_ok=True)
@@ -151,7 +152,7 @@ def embed_avi_dct(input_file, watermark):
     print("video_watermark_embed for AVI!")
     class Args:
         input = input_file
-        output = current_app.config['MEDIA_FOLDERS']['video']['embed']
+        output = get_user_dated_embed_dir('video')
 
     args = Args()
     os.makedirs(args.output, exist_ok=True)

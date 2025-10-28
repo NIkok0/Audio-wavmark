@@ -264,7 +264,7 @@
         <h3 class="section-title">
             <i class="glyphicon glyphicon-pencil"></i> 添加水印
         </h3>
-        <form method="POST" action="{{ url_for('text_add_watermark') }}" style="max-width: 500px; margin: 0 auto;" onsubmit="return validateWatermarkForm()">
+        <form method="POST" action="{{ url_for('text_add_watermark') }}" style="max-width: 500px; margin: 0 auto;" onsubmit="return validateWatermarkForm(event)">
             {{ form.hidden_tag() }}
             <input type="hidden" id="selectedFileIds" name="selected_file_ids" value="">
             <div class="form-group">
@@ -464,7 +464,7 @@
     // 为选中文件添加水印
     function addWatermarkToSelected() {
         if (selectedFiles.length === 0) {
-            alert('请先选择要添加水印的文件');
+            showNotification('请先选择要添加水印的文件', 'warning');
             return;
         }
         
@@ -585,7 +585,7 @@
     // 批量删除功能
     function deleteSelectedFiles() {
         if (selectedFiles.length === 0) {
-            alert('请先选择要删除的文件');
+            showNotification('请先选择要删除的文件', 'warning');
             return;
         }
         
@@ -618,7 +618,7 @@
     // 批量删除已添加水印的文件
     function deleteSelectedWatermarkedFiles() {
         if (selectedWatermarkedFiles.length === 0) {
-            alert('请先选择要删除的文件');
+            showNotification('请先选择要删除的文件', 'warning');
             return;
         }
         
@@ -651,7 +651,7 @@
     // 批量下载功能
     function downloadSelectedFiles() {
         if (selectedWatermarkedFiles.length === 0) {
-            alert('请先选择要下载的文件');
+            showNotification('请先选择要下载的文件', 'warning');
             return;
         }
         
@@ -680,15 +680,31 @@
     }
 
     // 表单提交前：同步选中ID，确保仅处理勾选文件
-    function validateWatermarkForm() {
+    function validateWatermarkForm(event) {
         var selectedIdsInput = document.getElementById('selectedFileIds');
-        if (!selectedFiles || selectedFiles.length === 0) {
-            alert('请先选择要添加水印的文件');
+        
+        // 获取当前选中的文件
+        var checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        var currentSelectedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
+        
+        if (!currentSelectedFiles || currentSelectedFiles.length === 0) {
+            // 阻止表单提交
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            showNotification('请先选择要添加水印的文件', 'warning');
             return false;
         }
+        
+        // 更新隐藏字段的值
         if (selectedIdsInput) {
-            selectedIdsInput.value = selectedFiles.join(',');
+            selectedIdsInput.value = currentSelectedFiles.join(',');
         }
+        
+        // 更新全局变量
+        selectedFiles = currentSelectedFiles;
+        
         return true;
     }
 

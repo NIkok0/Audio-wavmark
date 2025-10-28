@@ -5,6 +5,12 @@ import os
 import numpy as np
 from PIL import Image
 from flask import current_app, flash
+from watermark.utils.path_utils import (
+    get_user_dated_embed_dir,
+    ensure_ascii_local_copy,
+    prepare_ascii_output_path,
+    maybe_delete_temp,
+)
 
 # 图像水印算法所需
 import time
@@ -155,7 +161,8 @@ def embed_jpg_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    task.read_img(input_file)
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    task.read_img(safe_input)
     task.read_wm(watermark, mode='str')
 
     # 文件保存逻辑
@@ -163,12 +170,27 @@ def embed_jpg_dct(input_file, watermark):
     name_without_ext = os.path.splitext(original_name)[0]
     filename = f"{name_without_ext}_embed.{'jpg'}"
 
-    # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['image']['embed']
+    # 从app.config获取保存路径 - 使用用户日期分层路径
+    embed_dir = get_user_dated_embed_dir('image')
     full_path = os.path.join(embed_dir, filename)
 
-    # 嵌入水印并保存文件
-    task.embed(full_path)
+    # 嵌入水印并保存文件（中文路径兼容）
+    ascii_out, final_out = prepare_ascii_output_path(full_path)
+    task.embed(ascii_out)
+    if ascii_out != final_out:
+        try:
+            os.replace(ascii_out, final_out)
+        except Exception:
+            # 如果跨卷移动失败，回退为复制
+            import shutil
+            shutil.copy2(ascii_out, final_out)
+            try:
+                os.remove(ascii_out)
+            except Exception:
+                pass
+    full_path = final_out
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -195,7 +217,8 @@ def embed_jpeg_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    task.read_img(input_file)
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    task.read_img(safe_input)
     task.read_wm(watermark, mode='str')
 
     # 文件保存逻辑
@@ -203,12 +226,25 @@ def embed_jpeg_dct(input_file, watermark):
     name_without_ext = os.path.splitext(original_name)[0]
     filename = f"{name_without_ext}_embed.{'jpeg'}"
 
-    # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['image']['embed']
+    # 从app.config获取保存路径 - 使用用户日期分层路径
+    embed_dir = get_user_dated_embed_dir('image')
     full_path = os.path.join(embed_dir, filename)
 
-    # 嵌入水印并保存文件
-    task.embed(full_path)
+    ascii_out, final_out = prepare_ascii_output_path(full_path)
+    task.embed(ascii_out)
+    if ascii_out != final_out:
+        try:
+            os.replace(ascii_out, final_out)
+        except Exception:
+            import shutil
+            shutil.copy2(ascii_out, final_out)
+            try:
+                os.remove(ascii_out)
+            except Exception:
+                pass
+    full_path = final_out
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -235,7 +271,8 @@ def embed_png_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    task.read_img(input_file)
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    task.read_img(safe_input)
     task.read_wm(watermark, mode='str')
 
     # 文件保存逻辑
@@ -243,12 +280,25 @@ def embed_png_dct(input_file, watermark):
     name_without_ext = os.path.splitext(original_name)[0]
     filename = f"{name_without_ext}_embed.{'png'}"
 
-    # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['image']['embed']
+    # 从app.config获取保存路径 - 使用用户日期分层路径
+    embed_dir = get_user_dated_embed_dir('image')
     full_path = os.path.join(embed_dir, filename)
 
-    # 嵌入水印并保存文件
-    task.embed(full_path)
+    ascii_out, final_out = prepare_ascii_output_path(full_path)
+    task.embed(ascii_out)
+    if ascii_out != final_out:
+        try:
+            os.replace(ascii_out, final_out)
+        except Exception:
+            import shutil
+            shutil.copy2(ascii_out, final_out)
+            try:
+                os.remove(ascii_out)
+            except Exception:
+                pass
+    full_path = final_out
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -275,7 +325,8 @@ def embed_bmp_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    task.read_img(input_file)
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    task.read_img(safe_input)
     task.read_wm(watermark, mode='str')
 
     # 文件保存逻辑
@@ -283,12 +334,25 @@ def embed_bmp_dct(input_file, watermark):
     name_without_ext = os.path.splitext(original_name)[0]
     filename = f"{name_without_ext}_embed.{'bmp'}"
 
-    # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['image']['embed']
+    # 从app.config获取保存路径 - 使用用户日期分层路径
+    embed_dir = get_user_dated_embed_dir('image')
     full_path = os.path.join(embed_dir, filename)
 
-    # 嵌入水印并保存文件
-    task.embed(full_path)
+    ascii_out, final_out = prepare_ascii_output_path(full_path)
+    task.embed(ascii_out)
+    if ascii_out != final_out:
+        try:
+            os.replace(ascii_out, final_out)
+        except Exception:
+            import shutil
+            shutil.copy2(ascii_out, final_out)
+            try:
+                os.remove(ascii_out)
+            except Exception:
+                pass
+    full_path = final_out
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -302,7 +366,10 @@ def extract_jpg_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    watermark = task.extract(input_file, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
@@ -340,7 +407,10 @@ def extract_jpeg_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    watermark = task.extract(input_file, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
@@ -378,7 +448,10 @@ def extract_png_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    watermark = task.extract(input_file, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
@@ -416,7 +489,10 @@ def extract_bmp_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    watermark = task.extract(input_file, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    if safe_input != input_file:
+        maybe_delete_temp(safe_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")

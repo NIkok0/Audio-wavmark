@@ -3,6 +3,7 @@ import os
 
 # Third-party imports
 from flask import current_app
+from watermark.utils.path_utils import get_user_dated_embed_dir
 
 
 def embed(input_file, watermark, algorithm):
@@ -99,7 +100,7 @@ def embed_txt_zbit(input_file, watermark):
         filename = f"{name_without_ext}_embed.{'txt'}"
 
         # 从app.config获取保存路径
-        embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+        embed_dir = get_user_dated_embed_dir('text')
         full_path = os.path.join(embed_dir, filename)
 
         # 保存文件
@@ -178,7 +179,7 @@ def embed_doc_space(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'doc'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     # 保存文件
@@ -302,7 +303,7 @@ def embed_docx_space(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'docx'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     def watermark_to_zwc(watermark):
@@ -402,7 +403,7 @@ def embed_xml_space(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'xml'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     # 保存文件
@@ -493,7 +494,7 @@ def embed_pdf_md(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'pdf'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
     def embed_invisible_watermark(input_pdf, output_pdf, watermark_text, x=20, y=20):
         doc = fitz.open(input_pdf)
@@ -547,7 +548,7 @@ def embed_md_zbit(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'md'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     def watermark_to_zwc(watermark):
@@ -631,7 +632,7 @@ def embed_sql_zbit(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'md'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     def watermark_to_zwc(watermark):
@@ -707,7 +708,7 @@ def embed_csv_zbit(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'csv'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     def watermark_to_ws(watermark):
@@ -798,7 +799,7 @@ def embed_xlsx_ns(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'xlsx'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     def add_hidden_watermark_cell(xlsx_path, output_path, watermark_text):
@@ -856,7 +857,7 @@ def embed_xls_ns(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'xls'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_user_dated_embed_dir('text')
     full_path = os.path.join(embed_dir, filename)
 
     def cellname_to_rowcol(cellname):
