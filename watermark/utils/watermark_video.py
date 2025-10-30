@@ -51,11 +51,23 @@ def text_to_6char_hash(text,random_seed):
     return result_hash
 
 
-def embed(input_file, watermark, algorithm,random_seed):
-    """视频水印嵌入 - 负责算法调用和文件保存"""
-    
+def embed(input_file, watermark, algorithm, random_seed=None):
+    """视频水印嵌入 - 负责算法调用和文件保存（兼容老版本行为）
+
+    - 未提供 random_seed：内部生成 8 位数字种子，仅返回处理后文件路径。
+    - 提供了 random_seed：返回 (full_path, watermark_hash)。
+    """
+    import secrets
+
+    # 判断是否外部显式提供了种子
+    provided_seed = random_seed is not None
+
+    # 未提供则内部生成 8 位数字种子
+    if random_seed is None:
+        random_seed = str(secrets.randbelow(10**8)).zfill(8)
+
     # 将输入的水印文本转换为6位hash值
-    watermark_hash = text_to_6char_hash(watermark,random_seed)
+    watermark_hash = text_to_6char_hash(watermark, random_seed)
     print(f"原始水印文本: {watermark}")
     print(f"转换后的6位hash: {watermark_hash}")
     
@@ -90,8 +102,10 @@ def embed(input_file, watermark, algorithm,random_seed):
         if os.path.exists(processed_video) and processed_video != full_path:
             os.rename(processed_video, full_path)
         
-        # 返回文件路径、hash值和种子
-        return full_path, watermark_hash
+        # 返回：与旧版兼容
+        if provided_seed:
+            return full_path, watermark_hash
+        return full_path
         
     except Exception as e:
         print(f"视频水印算法 {algorithm} 失败: {str(e)}")
