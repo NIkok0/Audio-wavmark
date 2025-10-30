@@ -444,11 +444,24 @@ def download(file_id):
         return redirect(url_for('index'))
 
     try:
-        root_dir = os.path.abspath(os.path.join(current_app.root_path, '..'))
-        abs_path = os.path.join(root_dir, file.watermarked_path)
+        # 优先下载已加水印文件；若不存在则回退为原始文件
+        target_path = file.watermarked_path or file.original_path
+        if not target_path:
+            flash('未找到可下载的文件路径')
+            return redirect(url_for('index'))
+
+        # 如为相对路径则补齐为绝对路径
+        if not os.path.isabs(target_path):
+            root_dir = os.path.abspath(os.path.join(current_app.root_path, '..'))
+            target_path = os.path.join(root_dir, target_path)
+
+        if not os.path.exists(target_path):
+            flash('文件不存在或已被移除')
+            return redirect(url_for('index'))
+
         return send_file(
-            abs_path,  # 直接使用相对目录路径
-            file.filename,   # 文件名
+            target_path,
+            download_name=file.filename,
             as_attachment=True
         )
     except Exception as e:
