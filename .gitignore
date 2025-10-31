@@ -11,4 +11,5 @@ migrations/
 .flaskenv
 ckpts/y_256b_img.pth
 ffprobe.exe
+ffmpeg.exe
 
