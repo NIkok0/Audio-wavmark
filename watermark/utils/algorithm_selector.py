@@ -113,21 +113,18 @@ class AlgorithmSelector:
         # 获取文件后缀和类型
         _, extension = os.path.splitext(file_path)
         extension = extension[1:].lower()
-        
         file_type = get_file_type_by_extension(extension)
         if not file_type:
             raise ValueError(f"不支持的文件后缀: {extension}")
-        
         # 1. 验证文件类型
         if file_type not in self.modules:
             raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.modules.keys())}")
-
         # 2. 获取对应的模块
         module = self.modules[file_type]
-
         # 3. 动态获取extract函数并调用
         extract_func = getattr(module, "extract")
         if watermark_seed:
+            print("开始计算水印hash")
             watermark_hash_after = extract_func(file_path, algorithm)
             if str(watermark_hash_after) != str(watermark_text):
                 raise ValueError("水印hash不匹配")

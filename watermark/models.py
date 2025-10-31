@@ -54,6 +54,7 @@ class File(db.Model):
     original_path = db.Column(db.String(512), nullable=False)
     watermarked_path = db.Column(db.String(512), nullable=True)
     file_hash = db.Column(db.String(128), nullable=False)
+    file_watermark_hash = db.Column(db.String(128), nullable=True)
     has_watermark = db.Column(db.Boolean, default=False)
     file_type = db.Column(db.String(20), nullable=False)  # image/video/audio/text
     file_format = db.Column(db.String(20), nullable=False)  # jpg/png/mp4/wav/txt等
