@@ -42,24 +42,42 @@ def get_user_dated_extract_dir(media_type: str) -> str:
 
 def ensure_ascii_local_copy(input_path: str, preferred_ext: Optional[str] = None) -> str:
     """如果路径包含非ASCII字符，则复制到临时目录中的ASCII文件名并返回新路径。
-    否则直接返回原路径。
+    否则直接返回原路径（转换为绝对路径以确保兼容性）。
     preferred_ext: 可选，强制使用的目标扩展名（不带点）。
     """
     try:
-        input_path_str = str(input_path)
-        # 快速判断是否全ASCII
-        if all(ord(ch) < 128 for ch in input_path_str):
+        # 转换为绝对路径，确保路径格式统一
+        input_path_str = os.path.abspath(str(input_path))
+        
+        # 检查文件是否存在
+        if not os.path.exists(input_path_str):
+            # 如果文件不存在，尝试使用原始路径
+            input_path_str = str(input_path)
+        
+        # 更严格的ASCII判断：检查路径中是否包含非ASCII字符
+        # 使用try-except确保编码兼容性
+        try:
+            # 尝试将路径编码为系统默认编码，如果失败说明可能有编码问题
+            input_path_str.encode('ascii')
+            # 如果编码成功，说明是ASCII路径，但为了兼容性，仍需要转换为绝对路径
             return input_path_str
-    except Exception:
-        # 如果判断失败，兜底走复制
-        pass
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # 包含非ASCII字符，需要复制到ASCII路径
+            pass
+    except Exception as e:
+        # 如果判断失败，为了安全起见，走复制流程
+        input_path_str = str(input_path)
+    
+    # 确保源文件存在
+    if not os.path.exists(input_path_str):
+        raise FileNotFoundError(f"源文件不存在: {input_path_str}")
 
     temp_root = current_app.config.get('TEMP_FOLDER')
     if not temp_root:
         temp_root = os.path.join(current_app.instance_path, 'temp')
     os.makedirs(temp_root, exist_ok=True)
 
-    src_ext = os.path.splitext(input_path)[1]
+    src_ext = os.path.splitext(input_path_str)[1]
     if preferred_ext:
         dst_ext = '.' + preferred_ext.lstrip('.').lower()
     else:
@@ -67,8 +85,17 @@ def ensure_ascii_local_copy(input_path: str, preferred_ext: Optional[str] = None
 
     ascii_name = f"tmp_{uuid.uuid4().hex}{dst_ext}"
     dst_path = os.path.join(temp_root, ascii_name)
-    shutil.copy2(input_path, dst_path)
-    return dst_path
+    
+    # 使用copy2保留文件元数据，并添加错误处理
+    try:
+        shutil.copy2(input_path_str, dst_path)
+        # 验证复制是否成功
+        if not os.path.exists(dst_path):
+            raise IOError(f"文件复制失败: {dst_path}")
+        return dst_path
+    except Exception as e:
+        # 如果复制失败，尝试使用原始路径（某些情况下可能仍然有效）
+        raise IOError(f"无法复制文件到临时目录: {str(e)}") from e
 
 
 def prepare_ascii_output_path(target_path: str) -> tuple[str, str]:

@@ -1,5 +1,6 @@
 # Standard library imports
 import os
+import uuid
 
 # Third-party imports
 import numpy as np
@@ -18,6 +19,69 @@ from blind_watermark import WaterMark, blind_watermark
 blind_watermark.bw_notes.close()
 
 WATERMARK_FIXED_LENGTH = 13  # 水印固定字符数（DCT专用）
+
+
+def normalize_image_format(input_path: str, output_path: str = None) -> str:
+    """
+    标准化图像格式，确保图像是RGB模式的uint8格式，避免OpenCV警告和跨平台兼容性问题。
+    
+    Args:
+        input_path: 输入图像路径
+        output_path: 输出图像路径（如果为None，则创建临时文件）
+    
+    Returns:
+        输出图像路径（标准化后的文件路径）
+    """
+    try:
+        # 使用PIL加载图像，自动处理各种格式
+        img = Image.open(input_path)
+        
+        # 确保图像是RGB模式（如果是RGBA、L等模式，转换为RGB）
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # 如果output_path为None，创建临时文件
+        if output_path is None:
+            temp_root = current_app.config.get('TEMP_FOLDER')
+            if not temp_root:
+                temp_root = os.path.join(current_app.instance_path, 'temp')
+            os.makedirs(temp_root, exist_ok=True)
+            
+            _, ext = os.path.splitext(input_path)
+            ext = ext.lower() if ext else '.jpg'
+            # 确保扩展名有效
+            if ext not in ['.jpg', '.jpeg', '.png', '.bmp']:
+                ext = '.jpg'
+            temp_name = f"normalized_{uuid.uuid4().hex}{ext}"
+            output_path = os.path.join(temp_root, temp_name)
+        
+        # 保存为标准格式（确保是uint8）
+        # 根据文件扩展名选择格式
+        _, ext = os.path.splitext(output_path)
+        ext = ext.lower()
+        
+        if ext in ['.jpg', '.jpeg']:
+            img.save(output_path, 'JPEG', quality=95)
+        elif ext == '.png':
+            img.save(output_path, 'PNG')
+        elif ext == '.bmp':
+            img.save(output_path, 'BMP')
+        else:
+            # 默认使用JPEG格式
+            if not output_path.endswith('.jpg'):
+                output_path = output_path.rsplit('.', 1)[0] + '.jpg'
+            img.save(output_path, 'JPEG', quality=95)
+        
+        # 验证文件是否成功创建
+        if os.path.exists(output_path):
+            return output_path
+        else:
+            raise IOError(f"无法创建标准化图像文件: {output_path}")
+            
+    except Exception as e:
+        # 如果标准化失败，返回原路径（让blind_watermark自己处理）
+        print(f"图像格式标准化失败: {str(e)}，使用原文件")
+        return input_path
 
 
 def embed(input_file, watermark, algorithm):
@@ -154,43 +218,63 @@ def embed_jpg_dct(input_file, watermark):
     else:
         # 需要补全的长度
         padding_len = WATERMARK_FIXED_LENGTH - len(watermark)
-        middle_chars = padding_len - 2  # “印”的数量（减去开头和结尾的"水"）
+        middle_chars = padding_len - 2  # "印"的数量（减去开头和结尾的"水"）
         padding = "水" + "印" * middle_chars + "水"
         # 补全水印
         watermark = watermark + padding
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    task.read_img(safe_input)
-    task.read_wm(watermark, mode='str')
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        task.read_img(safe_input)
+        task.read_wm(watermark, mode='str')
 
-    # 文件保存逻辑
-    original_name = os.path.basename(input_file)
-    name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'jpg'}"
+        # 文件保存逻辑
+        original_name = os.path.basename(input_file)
+        name_without_ext = os.path.splitext(original_name)[0]
+        filename = f"{name_without_ext}_embed.{'jpg'}"
 
-    # 从app.config获取保存路径 - 使用用户日期分层路径
-    embed_dir = get_user_dated_embed_dir('image')
-    full_path = os.path.join(embed_dir, filename)
+        # 从app.config获取保存路径 - 使用用户日期分层路径
+        embed_dir = get_user_dated_embed_dir('image')
+        full_path = os.path.join(embed_dir, filename)
 
-    # 嵌入水印并保存文件（中文路径兼容）
-    ascii_out, final_out = prepare_ascii_output_path(full_path)
-    task.embed(ascii_out)
-    if ascii_out != final_out:
-        try:
-            os.replace(ascii_out, final_out)
-        except Exception:
-            # 如果跨卷移动失败，回退为复制
-            import shutil
-            shutil.copy2(ascii_out, final_out)
+        # 嵌入水印并保存文件（中文路径兼容）
+        ascii_out, final_out = prepare_ascii_output_path(full_path)
+        task.embed(ascii_out)
+        if ascii_out != final_out:
             try:
-                os.remove(ascii_out)
+                os.replace(ascii_out, final_out)
             except Exception:
-                pass
-    full_path = final_out
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+                # 如果跨卷移动失败，回退为复制
+                import shutil
+                shutil.copy2(ascii_out, final_out)
+                try:
+                    os.remove(ascii_out)
+                except Exception:
+                    pass
+        full_path = final_out
+    finally:
+        # 清理临时文件
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -217,34 +301,54 @@ def embed_jpeg_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    task.read_img(safe_input)
-    task.read_wm(watermark, mode='str')
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        task.read_img(safe_input)
+        task.read_wm(watermark, mode='str')
 
-    # 文件保存逻辑
-    original_name = os.path.basename(input_file)
-    name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'jpeg'}"
+        # 文件保存逻辑
+        original_name = os.path.basename(input_file)
+        name_without_ext = os.path.splitext(original_name)[0]
+        filename = f"{name_without_ext}_embed.{'jpeg'}"
 
-    # 从app.config获取保存路径 - 使用用户日期分层路径
-    embed_dir = get_user_dated_embed_dir('image')
-    full_path = os.path.join(embed_dir, filename)
+        # 从app.config获取保存路径 - 使用用户日期分层路径
+        embed_dir = get_user_dated_embed_dir('image')
+        full_path = os.path.join(embed_dir, filename)
 
-    ascii_out, final_out = prepare_ascii_output_path(full_path)
-    task.embed(ascii_out)
-    if ascii_out != final_out:
-        try:
-            os.replace(ascii_out, final_out)
-        except Exception:
-            import shutil
-            shutil.copy2(ascii_out, final_out)
+        ascii_out, final_out = prepare_ascii_output_path(full_path)
+        task.embed(ascii_out)
+        if ascii_out != final_out:
             try:
-                os.remove(ascii_out)
+                os.replace(ascii_out, final_out)
             except Exception:
-                pass
-    full_path = final_out
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+                import shutil
+                shutil.copy2(ascii_out, final_out)
+                try:
+                    os.remove(ascii_out)
+                except Exception:
+                    pass
+        full_path = final_out
+    finally:
+        # 清理临时文件
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -271,34 +375,54 @@ def embed_png_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    task.read_img(safe_input)
-    task.read_wm(watermark, mode='str')
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        task.read_img(safe_input)
+        task.read_wm(watermark, mode='str')
 
-    # 文件保存逻辑
-    original_name = os.path.basename(input_file)
-    name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'png'}"
+        # 文件保存逻辑
+        original_name = os.path.basename(input_file)
+        name_without_ext = os.path.splitext(original_name)[0]
+        filename = f"{name_without_ext}_embed.{'png'}"
 
-    # 从app.config获取保存路径 - 使用用户日期分层路径
-    embed_dir = get_user_dated_embed_dir('image')
-    full_path = os.path.join(embed_dir, filename)
+        # 从app.config获取保存路径 - 使用用户日期分层路径
+        embed_dir = get_user_dated_embed_dir('image')
+        full_path = os.path.join(embed_dir, filename)
 
-    ascii_out, final_out = prepare_ascii_output_path(full_path)
-    task.embed(ascii_out)
-    if ascii_out != final_out:
-        try:
-            os.replace(ascii_out, final_out)
-        except Exception:
-            import shutil
-            shutil.copy2(ascii_out, final_out)
+        ascii_out, final_out = prepare_ascii_output_path(full_path)
+        task.embed(ascii_out)
+        if ascii_out != final_out:
             try:
-                os.remove(ascii_out)
+                os.replace(ascii_out, final_out)
             except Exception:
-                pass
-    full_path = final_out
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+                import shutil
+                shutil.copy2(ascii_out, final_out)
+                try:
+                    os.remove(ascii_out)
+                except Exception:
+                    pass
+        full_path = final_out
+    finally:
+        # 清理临时文件
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -325,34 +449,54 @@ def embed_bmp_dct(input_file, watermark):
 
     # 两个 password 决定嵌入方式，默认为 1，后续可用于拓展密钥或权限功能
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    task.read_img(safe_input)
-    task.read_wm(watermark, mode='str')
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        task.read_img(safe_input)
+        task.read_wm(watermark, mode='str')
 
-    # 文件保存逻辑
-    original_name = os.path.basename(input_file)
-    name_without_ext = os.path.splitext(original_name)[0]
-    filename = f"{name_without_ext}_embed.{'bmp'}"
+        # 文件保存逻辑
+        original_name = os.path.basename(input_file)
+        name_without_ext = os.path.splitext(original_name)[0]
+        filename = f"{name_without_ext}_embed.{'bmp'}"
 
-    # 从app.config获取保存路径 - 使用用户日期分层路径
-    embed_dir = get_user_dated_embed_dir('image')
-    full_path = os.path.join(embed_dir, filename)
+        # 从app.config获取保存路径 - 使用用户日期分层路径
+        embed_dir = get_user_dated_embed_dir('image')
+        full_path = os.path.join(embed_dir, filename)
 
-    ascii_out, final_out = prepare_ascii_output_path(full_path)
-    task.embed(ascii_out)
-    if ascii_out != final_out:
-        try:
-            os.replace(ascii_out, final_out)
-        except Exception:
-            import shutil
-            shutil.copy2(ascii_out, final_out)
+        ascii_out, final_out = prepare_ascii_output_path(full_path)
+        task.embed(ascii_out)
+        if ascii_out != final_out:
             try:
-                os.remove(ascii_out)
+                os.replace(ascii_out, final_out)
             except Exception:
-                pass
-    full_path = final_out
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+                import shutil
+                shutil.copy2(ascii_out, final_out)
+                try:
+                    os.remove(ascii_out)
+                except Exception:
+                    pass
+        full_path = final_out
+    finally:
+        # 清理临时文件
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     # # 计算嵌入时间
     # end = time.time()
@@ -366,10 +510,30 @@ def extract_jpg_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    finally:
+        # 确保临时文件被清理
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
@@ -407,10 +571,30 @@ def extract_jpeg_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    finally:
+        # 确保临时文件被清理
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
@@ -448,10 +632,30 @@ def extract_png_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    finally:
+        # 确保临时文件被清理
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
@@ -489,10 +693,30 @@ def extract_bmp_dct(input_file):
     # start = time.time()
 
     task = WaterMark(password_img=1, password_wm=1)
-    safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
-    watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
-    if safe_input != input_file:
-        maybe_delete_temp(safe_input)
+    safe_input = None
+    normalized_input = None
+    try:
+        safe_input = ensure_ascii_local_copy(input_file, preferred_ext=None)
+        # 确保使用绝对路径
+        safe_input = os.path.abspath(safe_input)
+        
+        # 标准化图像格式，避免OpenCV警告和跨平台兼容性问题
+        normalized_input = normalize_image_format(safe_input)
+        
+        # 如果标准化创建了新文件，使用新文件
+        if normalized_input != safe_input:
+            # 确保临时文件被清理
+            if safe_input != os.path.abspath(str(input_file)):
+                maybe_delete_temp(safe_input)
+            safe_input = normalized_input
+        
+        watermark = task.extract(safe_input, wm_shape=WATERMARK_FIXED_LENGTH * 24, mode='str')
+    finally:
+        # 确保临时文件被清理
+        if safe_input and safe_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(safe_input)
+        if normalized_input and normalized_input != safe_input and normalized_input != os.path.abspath(str(input_file)):
+            maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
         flash("提取失败：提取算法与原嵌入算法不匹配", "error")
