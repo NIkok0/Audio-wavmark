@@ -23,6 +23,7 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(64), unique=True, nullable=False)     # 邮箱
     password = db.Column(db.String(512), nullable=False)              # 密码
     is_admin = db.Column(db.Boolean, default=False)                  # 是否管理员
+    retention_days = db.Column(db.Integer, nullable=True)            # 用户自定义文件保留天数（为空表示使用系统默认）
 
     # 关系
     groups = db.relationship("Group", secondary=user_group_rel, back_populates="users")

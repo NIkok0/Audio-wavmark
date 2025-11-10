@@ -131,6 +131,18 @@ FILE_TYPE_CONFIG = {
                     }
                 },
                 'default_algorithm': 'DCT'
+            },
+            'mov': {
+                'mime_type': 'video/quicktime',
+                'algorithms': {
+                    'DCT': {
+                        'name': 'DCT变换',
+                        'description': '视频DCT水印算法',
+                        'implemented': True,
+                        'priority': 1
+                    }
+                },
+                'default_algorithm': 'DCT'
             }
         },
         'max_size': get_max_size_from_env('video')

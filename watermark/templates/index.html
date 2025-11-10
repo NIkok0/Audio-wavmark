@@ -48,6 +48,318 @@
     .media-tabs .tag-text  { background: linear-gradient(135deg, #10b981, #22c55e); }
     .media-section { scroll-margin-top: 90px; }
     html { scroll-behavior: smooth; }
+    
+    /* 步骤引导流程样式 */
+    .guide-flow-container { max-width: 1200px; margin: 0 auto; }
+    .guide-header h3 { color: #1e293b; font-size: 1.75rem; }
+    .steps-wrapper { display: flex; gap: 1rem; align-items: stretch; margin-bottom: 2rem; position: relative; }
+    
+    .step-card { 
+        flex: 1; 
+        background: #fff; 
+        border-radius: 16px; 
+        border: 2px solid #e2e8f0; 
+        padding: 1.5rem; 
+        position: relative;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .step-card:hover { 
+        border-color: #3b82f6; 
+        box-shadow: 0 8px 24px rgba(59,130,246,0.15);
+        transform: translateY(-4px);
+    }
+    
+    .step-number {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.9rem;
+        box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+    }
+    
+    .step-content { text-align: center; }
+    .step-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .step-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; }
+    .step-desc { font-size: 0.9rem; color: #64748b; margin-bottom: 1rem; line-height: 1.4; }
+    
+    .step-btn {
+        border: none;
+        border-radius: 8px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        justify-content: center;
+    }
+    .btn-login {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: white;
+    }
+    .btn-login:hover {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+    }
+    .btn-action {
+        background: #f1f5f9;
+        color: #475569;
+    }
+    .btn-action:hover {
+        background: #e2e8f0;
+        color: #1e293b;
+    }
+    
+    .step-arrow {
+        position: absolute;
+        right: -1.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 2rem;
+        color: #cbd5e1;
+        font-weight: 300;
+    }
+    .step-card:last-child .step-arrow { display: none; }
+    
+    /* 媒体类型网格 */
+    .media-type-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    .media-type-item {
+        padding: 0.6rem;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .media-type-item:hover {
+        background: #fff;
+        border-color: #3b82f6;
+        transform: scale(1.05);
+    }
+    .media-icon { font-size: 1.5rem; }
+    .media-label { font-size: 0.75rem; color: #475569; font-weight: 600; }
+    
+    /* 登录后可点击的媒体类型链接 */
+    .media-type-item-link {
+        padding: 0.8rem 0.6rem;
+        background: linear-gradient(135deg, #f8fafc, #ffffff);
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.4rem;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        text-decoration: none;
+        color: inherit;
+        position: relative;
+        overflow: hidden;
+    }
+    .media-type-item-link::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(99, 102, 241, 0.05));
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+    .media-type-item-link:hover {
+        background: #ffffff;
+        border-color: #3b82f6;
+        transform: translateY(-3px) scale(1.05);
+        text-decoration: none;
+        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+    }
+    .media-type-item-link:hover::before {
+        opacity: 1;
+    }
+    .media-type-item-link .media-icon {
+        font-size: 1.8rem;
+        transition: transform 0.25s ease;
+        position: relative;
+        z-index: 1;
+    }
+    .media-type-item-link:hover .media-icon {
+        transform: scale(1.15) rotate(5deg);
+    }
+    .media-type-item-link .media-label {
+        position: relative;
+        z-index: 1;
+        font-weight: 700;
+    }
+    
+    /* 登录后激活状态的步骤卡片 */
+    .step-card-active {
+        border-color: #3b82f6;
+    }
+    .step-card-active .step-number {
+        background: linear-gradient(135deg, #10b981, #22c55e);
+    }
+    
+    .login-prompt .alert {
+        border-radius: 12px;
+        border: 1px solid #bfdbfe;
+        background: #eff6ff;
+    }
+    
+    /* 响应式 */
+    @media (max-width: 992px) {
+        .steps-wrapper { flex-direction: column; }
+        .step-arrow { display: none; }
+        .step-card { margin-bottom: 1rem; }
+    }
+    
+    /* 详细介绍模块样式 */
+    .media-detail-card {
+        background: #fff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        scroll-margin-top: 90px;
+    }
+    .media-detail-card:hover {
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        transform: translateY(-4px);
+    }
+    
+    .media-detail-header {
+        color: white;
+        padding: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+    .media-detail-icon {
+        font-size: 3rem;
+        flex-shrink: 0;
+    }
+    .media-detail-header h4 {
+        color: white;
+        font-weight: 700;
+        font-size: 1.5rem;
+    }
+    .media-detail-header p {
+        font-size: 0.95rem;
+    }
+    
+    .media-detail-body {
+        padding: 2rem;
+    }
+    
+    .feature-box {
+        text-align: center;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 12px;
+        height: 100%;
+        transition: all 0.2s;
+    }
+    .feature-box:hover {
+        background: #e0f2fe;
+        transform: translateY(-2px);
+    }
+    .feature-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    .feature-title {
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+        font-size: 1rem;
+    }
+    .feature-desc {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin: 0;
+        line-height: 1.4;
+    }
+    
+    .tech-info {
+        background: #f8fafc;
+        padding: 1.25rem;
+        border-radius: 12px;
+        border-left: 4px solid #3b82f6;
+    }
+    .tech-info h6 {
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+    .tech-info .small {
+        color: #475569;
+        line-height: 1.6;
+    }
+    
+    .use-cases {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+    .use-cases .badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
+        font-weight: 600;
+    }
+    
+    /* 问题反馈区域样式 */
+    .feedback-section {
+        animation: fadeInUp 0.6s ease;
+    }
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .feedback-section .contact-info {
+        transition: all 0.3s ease;
+    }
+    .feedback-section .contact-info:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .feedback-section .contact-item {
+        line-height: 1.8;
+    }
+    @media (max-width: 768px) {
+        .feedback-section .col-md-4 {
+            margin-top: 1.5rem;
+        }
+    }
+
 </style>
 {% endblock %}
 {% block page_content %}
@@ -55,6 +367,9 @@
     <h1>数字水印系统</h1>
     <p class="">实现图片、音频、视频、文档的水印嵌入与提取。</p>
 </div>
+
+<!-- 登录态埋点：使用 data-auth 避免在 <script> 中直接插入模板表达式触发静态分析误报 -->
+<div id="auth-meta" data-auth="{{ '1' if current_user.is_authenticated else '0' }}" style="display:none;"></div>
 
 <div class="row g-3">
     <div class="col-md-3">
@@ -84,49 +399,404 @@
     <div class="col-md-3">
         <div class="card stat-card stat-unwatermarked">
             <div class="card-body">
-                <div class="stat-wrap"><h6 class="mb-1">系统未加水印</h6></div>
-                <h3 class="mb-0">{{ non_watermarked_count }}</h3>
+                <div class="stat-wrap"><h6 class="mb-1">系统上传文件</h6></div>
+                <h3 class="mb-0">{{ total_files }}</h3>
             </div>
         </div>
     </div>
 </div>
 
-{# 未登录时在统计卡下显示四媒体标签 #}
+<!-- 未登录：步骤式引导UI，引导用户了解流程并登录 -->
 {% if not current_user.is_authenticated %}
-<div class="mt-3">
-    <ul class="nav nav-pills gap-4 media-tabs">
-        <li class="nav-item"><a class="nav-link tag-image" href="#section-image">图片</a></li>
-        <li class="nav-item"><a class="nav-link tag-audio" href="#section-audio">音频</a></li>
-        <li class="nav-item"><a class="nav-link tag-video" href="#section-video">视频</a></li>
-        <li class="nav-item"><a class="nav-link tag-text" href="#section-text">文档</a></li>
-    </ul>
-    <div class="text-muted small mt-2">点击上方彩色方块快速跳转到下方介绍</div>
-    <hr class="mt-3 mb-3"/>
-    <div id="section-image" class="media-section py-3">
-        <h5 class="mb-2">图片水印</h5>
-        <p class="mb-2">支持为图片添加鲁棒水印与提取，适配常见格式，提供可视化结果预览。</p>
+<div class="mt-4">
+    <!-- 引导流程卡片 -->
+    <div class="guide-flow-container">
+        <div class="guide-header text-center mb-4">
+            <h3 class="fw-bold mb-2">🎯 开始使用数字水印系统</h3>
+            <p class="text-muted">跟随下方步骤，了解如何保护您的数字内容</p>
+        </div>
+        
+        <!-- 步骤流程 -->
+        <div class="steps-wrapper">
+            <!-- 步骤1：注册登录 -->
+            <div class="step-card" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <div class="step-icon">🔐</div>
+                    <h5 class="step-title">注册 / 登录账号</h5>
+                    <p class="step-desc">创建您的专属账号，开始使用系统功能</p>
+                    <button class="step-btn btn-login" data-action="login">
+                        <span>立即登录</span>
+                        <i class="glyphicon glyphicon-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="step-arrow">→</div>
+            </div>
+            
+            <!-- 步骤2：选择文件类型 -->
+            <div class="step-card" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <div class="step-icon">📁</div>
+                    <h5 class="step-title">选择内容类型</h5>
+                    <p class="step-desc">支持图片、音频、视频、文档四种类型</p>
+                    <div class="media-type-grid">
+                        <div class="media-type-item" data-type="image">
+                            <span class="media-icon">🖼️</span>
+                            <span class="media-label">图片</span>
+                        </div>
+                        <div class="media-type-item" data-type="audio">
+                            <span class="media-icon">🎵</span>
+                            <span class="media-label">音频</span>
+                        </div>
+                        <div class="media-type-item" data-type="video">
+                            <span class="media-icon">🎬</span>
+                            <span class="media-label">视频</span>
+                        </div>
+                        <div class="media-type-item" data-type="text">
+                            <span class="media-icon">📄</span>
+                            <span class="media-label">文档</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="step-arrow">→</div>
+            </div>
+            
+            <!-- 步骤3：添加水印 -->
+            <div class="step-card" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <div class="step-icon">✨</div>
+                    <h5 class="step-title">嵌入数字水印</h5>
+                    <p class="step-desc">为您的内容添加隐形保护标记</p>
+                    <button class="step-btn btn-action" data-action="embed">
+                        <span>开始添加</span>
+                        <i class="glyphicon glyphicon-plus"></i>
+                    </button>
+                </div>
+                <div class="step-arrow">→</div>
+            </div>
+            
+            <!-- 步骤4：提取验证 -->
+            <div class="step-card" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <div class="step-icon">🔍</div>
+                    <h5 class="step-title">提取与验证</h5>
+                    <p class="step-desc">验证水印完整性，追溯内容来源</p>
+                    <button class="step-btn btn-action" data-action="extract">
+                        <span>验证水印</span>
+                        <i class="glyphicon glyphicon-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 登录提示 -->
+        <div class="login-prompt mt-4">
+            <div class="alert alert-info d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <i class="glyphicon glyphicon-info-sign me-2" style="font-size: 1.2rem;"></i>
+                    <span>
+                        <strong>提示：</strong>您需要先登录才能使用完整功能。点击任意步骤按钮将引导您登录。
+                    </span>
+                </div>
+                <a href="{{ url_for('signin') }}" class="btn btn-primary btn-sm ms-3 flex-shrink-0">
+                    <i class="glyphicon glyphicon-log-in"></i> 前往登录
+                </a>
+            </div>
+        </div>
     </div>
-    <hr/>
-    <div id="section-audio" class="media-section py-3">
-        <h5 class="mb-2">音频水印</h5>
-        <p class="mb-2">面向音频的嵌入与提取流程，抗常见压缩与裁剪，支持多段批处理。</p>
+    
+    <!-- 详细介绍模块 -->
+    <div class="mt-5">
+        <h3 class="text-center mb-4 fw-bold">💡 功能详解</h3>
+        <p class="text-center text-muted mb-5">深入了解各类数字水印技术的特性与应用场景</p>
+        
+        <!-- 图片水印 -->
+        <div id="section-image" class="media-detail-card mb-4">
+            <div class="media-detail-header" style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                <div class="media-detail-icon">🖼️</div>
+                <div>
+                    <h4 class="mb-1">图片水印</h4>
+                    <p class="mb-0 opacity-90">支持为图片添加鲁棒水印与提取，适配常见格式，提供可视化结果预览</p>
+                </div>
+            </div>
+            <div class="media-detail-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">✅</div>
+                            <h6 class="feature-title">支持格式</h6>
+                            <p class="feature-desc">JPG、PNG、BMP、TIFF 等主流图片格式</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🛡️</div>
+                            <h6 class="feature-title">鲁棒性强</h6>
+                            <p class="feature-desc">抗压缩、裁剪、旋转等常见攻击操作</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">👁️</div>
+                            <h6 class="feature-title">隐蔽性好</h6>
+                            <p class="feature-desc">水印不可见，不影响图片质量和观感</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-info mt-3">
+                    <h6 class="text-muted mb-2"><i class="glyphicon glyphicon-cog"></i> 技术说明</h6>
+                    <p class="small mb-2">采用先进的频域变换算法，将水印信息嵌入到图片的DCT系数中，确保在保持视觉质量的同时具有强鲁棒性。</p>
+                    <div class="use-cases">
+                        <span class="badge bg-primary">摄影作品保护</span>
+                        <span class="badge bg-info">产品图片溯源</span>
+                        <span class="badge bg-success">版权声明</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 音频水印 -->
+        <div id="section-audio" class="media-detail-card mb-4">
+            <div class="media-detail-header" style="background: linear-gradient(135deg, #0ea5e9, #06b6d4);">
+                <div class="media-detail-icon">🎵</div>
+                <div>
+                    <h4 class="mb-1">音频水印</h4>
+                    <p class="mb-0 opacity-90">面向音频的嵌入与提取流程，抗常见压缩与裁剪，支持多段批处理</p>
+                </div>
+            </div>
+            <div class="media-detail-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🎧</div>
+                            <h6 class="feature-title">音质保障</h6>
+                            <p class="feature-desc">嵌入水印后音频质量无损，人耳无法察觉</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🔊</div>
+                            <h6 class="feature-title">抗攻击能力</h6>
+                            <p class="feature-desc">抵抗压缩、重采样、噪声添加等操作</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">⚡</div>
+                            <h6 class="feature-title">批量处理</h6>
+                            <p class="feature-desc">支持多文件并行处理，提升工作效率</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-info mt-3">
+                    <h6 class="text-muted mb-2"><i class="glyphicon glyphicon-cog"></i> 技术说明</h6>
+                    <p class="small mb-2">基于扩频技术和心理声学模型，在不可听频段或掩蔽效应区域嵌入水印信号，确保听觉透明性。</p>
+                    <div class="use-cases">
+                        <span class="badge bg-primary">音乐版权保护</span>
+                        <span class="badge bg-info">广播监测</span>
+                        <span class="badge bg-success">内容溯源</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视频水印 -->
+        <div id="section-video" class="media-detail-card mb-4">
+            <div class="media-detail-header" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                <div class="media-detail-icon">🎬</div>
+                <div>
+                    <h4 class="mb-1">视频水印</h4>
+                    <p class="mb-0 opacity-90">提供视频帧级处理与稳定提取，兼容常见容器与编码格式</p>
+                </div>
+            </div>
+            <div class="media-detail-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🎞️</div>
+                            <h6 class="feature-title">帧级嵌入</h6>
+                            <p class="feature-desc">在关键帧中嵌入水印，保持视频流畅</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🔒</div>
+                            <h6 class="feature-title">格式兼容</h6>
+                            <p class="feature-desc">支持MP4、AVI、MOV等主流视频格式</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🎯</div>
+                            <h6 class="feature-title">精准提取</h6>
+                            <p class="feature-desc">即使经过编辑也能准确提取水印信息</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-info mt-3">
+                    <h6 class="text-muted mb-2"><i class="glyphicon glyphicon-cog"></i> 技术说明</h6>
+                    <p class="small mb-2">结合时域和空域技术，在视频帧的特定区域嵌入水印，同时考虑时间一致性和空间分布。</p>
+                    <div class="use-cases">
+                        <span class="badge bg-primary">影视作品保护</span>
+                        <span class="badge bg-info">直播内容监管</span>
+                        <span class="badge bg-success">盗版追踪</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 文档水印 -->
+        <div id="section-text" class="media-detail-card mb-4">
+            <div class="media-detail-header" style="background: linear-gradient(135deg, #10b981, #22c55e);">
+                <div class="media-detail-icon">📄</div>
+                <div>
+                    <h4 class="mb-1">文档水印</h4>
+                    <p class="mb-0 opacity-90">支持文档/文本内容添加与提取数字水印，追踪来源与完整性</p>
+                </div>
+            </div>
+            <div class="media-detail-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">📝</div>
+                            <h6 class="feature-title">文本嵌入</h6>
+                            <p class="feature-desc">在文档内容中隐蔽嵌入水印信息</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">🔍</div>
+                            <h6 class="feature-title">完整性验证</h6>
+                            <p class="feature-desc">检测文档是否被篡改或复制传播</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-box">
+                            <div class="feature-icon">📊</div>
+                            <h6 class="feature-title">格式支持</h6>
+                            <p class="feature-desc">支持TXT、DOC、PDF等多种文档格式</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-info mt-3">
+                    <h6 class="text-muted mb-2"><i class="glyphicon glyphicon-cog"></i> 技术说明</h6>
+                    <p class="small mb-2">利用文本格式特征、同义词替换、语义保持等技术，在不改变文档语义的前提下嵌入水印。</p>
+                    <div class="use-cases">
+                        <span class="badge bg-primary">机密文档保护</span>
+                        <span class="badge bg-info">内部泄露追踪</span>
+                        <span class="badge bg-success">学术论文防护</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <hr/>
-    <div id="section-video" class="media-section py-3">
-        <h5 class="mb-2">视频水印</h5>
-        <p class="mb-2">提供视频帧级处理与稳定提取，兼容常见容器与编码格式。</p>
-    </div>
-    <hr/>
-    <div id="section-text" class="media-section py-3">
-        <h5 class="mb-2">文档水印</h5>
-        <p class="mb-2">支持文档/文本内容添加与提取数字水印，追踪来源与完整性。</p>
-    </div>
-    <hr/>
 {% endif %}
 
-{# 移除旧的“我的文件”卡片，合并到下方 #}
+<!-- 登录后内容 -->
 
 {% if current_user.is_authenticated %}
+<!-- 登录后的引导式卡片 -->
+<div class="mt-4">
+    <div class="guide-flow-container">
+        <div class="guide-header text-center mb-4">
+            <h3 class="fw-bold mb-2">🚀 快速开始</h3>
+            <p class="text-muted">选择您要处理的内容类型，开始添加或提取水印</p>
+        </div>
+        
+        <!-- 步骤流程 -->
+        <div class="steps-wrapper">
+            <!-- 步骤1：选择文件类型 → process页面 -->
+            <div class="step-card step-card-active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <div class="step-icon">📁</div>
+                    <h5 class="step-title">选择内容类型</h5>
+                    <p class="step-desc">支持图片、音频、视频、文档四种类型</p>
+                    <div class="media-type-grid">
+                        <a href="{{ url_for('image_process') }}" class="media-type-item-link" data-type="image">
+                            <span class="media-icon">🖼️</span>
+                            <span class="media-label">图片</span>
+                        </a>
+                        <a href="{{ url_for('audio_process') }}" class="media-type-item-link" data-type="audio">
+                            <span class="media-icon">🎵</span>
+                            <span class="media-label">音频</span>
+                        </a>
+                        <a href="{{ url_for('video_process') }}" class="media-type-item-link" data-type="video">
+                            <span class="media-icon">🎬</span>
+                            <span class="media-label">视频</span>
+                        </a>
+                        <a href="{{ url_for('text_process') }}" class="media-type-item-link" data-type="text">
+                            <span class="media-icon">📄</span>
+                            <span class="media-label">文档</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="step-arrow">→</div>
+            </div>
+            
+            <!-- 步骤2：嵌入数字水印 → 四种媒体类型 -->
+            <div class="step-card step-card-active" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <div class="step-icon">✨</div>
+                    <h5 class="step-title">嵌入数字水印</h5>
+                    <p class="step-desc">为您的内容添加隐形保护标记</p>
+                    <div class="media-type-grid">
+                        <a href="{{ url_for('image_add_watermark') }}" class="media-type-item-link" data-type="image">
+                            <span class="media-icon">🖼️</span>
+                            <span class="media-label">图片水印</span>
+                        </a>
+                        <a href="{{ url_for('audio_add_watermark') }}" class="media-type-item-link" data-type="audio">
+                            <span class="media-icon">🎵</span>
+                            <span class="media-label">音频水印</span>
+                        </a>
+                        <a href="{{ url_for('video_add_watermark') }}" class="media-type-item-link" data-type="video">
+                            <span class="media-icon">🎬</span>
+                            <span class="media-label">视频水印</span>
+                        </a>
+                        <a href="{{ url_for('text_add_watermark') }}" class="media-type-item-link" data-type="text">
+                            <span class="media-icon">📄</span>
+                            <span class="media-label">文档水印</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="step-arrow">→</div>
+            </div>
+            
+            <!-- 步骤3：提取与验证 → 四种媒体类型 -->
+            <div class="step-card step-card-active" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <div class="step-icon">🔍</div>
+                    <h5 class="step-title">提取与验证</h5>
+                    <p class="step-desc">验证水印完整性，追溯内容来源</p>
+                    <div class="media-type-grid">
+                        <a href="{{ url_for('image_extract_watermark') }}" class="media-type-item-link" data-type="image">
+                            <span class="media-icon">🖼️</span>
+                            <span class="media-label">提取图片</span>
+                        </a>
+                        <a href="{{ url_for('audio_extract_watermark') }}" class="media-type-item-link" data-type="audio">
+                            <span class="media-icon">🎵</span>
+                            <span class="media-label">提取音频</span>
+                        </a>
+                        <a href="{{ url_for('video_extract_watermark') }}" class="media-type-item-link" data-type="video">
+                            <span class="media-icon">🎬</span>
+                            <span class="media-label">提取视频</span>
+                        </a>
+                        <a href="{{ url_for('text_extract_watermark') }}" class="media-type-item-link" data-type="text">
+                            <span class="media-icon">📄</span>
+                            <span class="media-label">提取文档</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mt-4">
     <div class="card-body">
         <h5 class="mb-3">我的数据概览</h5>
@@ -152,8 +822,8 @@
             </div>
             <div class="col-6 col-md-3">
                 <div class="user-stat-box">
-                    <div class="user-stat-title">我的未加水印</div>
-                    <div class="user-stat-number">{{ user_stats.non_watermarked }}</div>
+                    <div class="user-stat-title">我的上传文件</div>
+                    <div class="user-stat-number">{{ user_stats.total }}</div>
                 </div>
             </div>
         </div>
@@ -168,11 +838,11 @@
                 </div>
             </div>
     <div class="col-md-6" id="rightListsColumn">
-                <!-- 未添加水印的文件列表 -->
+                <!-- 已上传的文件列表 -->
                 <div class="card mb-3">
                     <div class="card-body">
-                        <h6 class="card-subtitle mb-3 text-muted">未添加水印的文件</h6>
-                        {% if user_unwatermarked_pagination and user_unwatermarked_pagination.items %}
+                        <h6 class="card-subtitle mb-3 text-muted">已上传的文件</h6>
+                        {% if user_all_uploaded_pagination and user_all_uploaded_pagination.items %}
                         <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
                             <table class="table table-sm align-middle" style="table-layout: fixed;">
                                 <colgroup>
@@ -190,11 +860,15 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for f in user_unwatermarked_pagination.items %}
+                                    {% for f in user_all_uploaded_pagination.items %}
                                     <tr>
                                         <td>
                                             <div class="text-truncate" style="max-width: 100%;" title="{{ f.filename }}">
-                                                <i class="glyphicon glyphicon-time text-muted"></i>
+                                                {% if f.has_watermark %}
+                                                <i class="glyphicon glyphicon-ok text-success" title="已加水印"></i>
+                                                {% else %}
+                                                <i class="glyphicon glyphicon-time text-muted" title="未加水印"></i>
+                                                {% endif %}
                                                 {{ f.filename }}
                                             </div>
                                         </td>
@@ -206,9 +880,9 @@
                                 </tbody>
                             </table>
                         </div>
-                        {{ render_pagination(user_unwatermarked_pagination, 'index', 'unwatermarked_page') }}
+                        {{ render_pagination(user_all_uploaded_pagination, 'index', 'all_uploaded_page') }}
                         {% else %}
-                        <div class="text-muted">暂无未添加水印的文件</div>
+                        <div class="text-muted">暂无已上传的文件</div>
                         {% endif %}
                     </div>
                 </div>
@@ -273,12 +947,162 @@
     </div>
 </div>
 {% endif %}
+
+<!-- 问题反馈区域 -->
+<div class="feedback-section mt-5 mb-4">
+    <div class="card shadow-sm" style="border-radius: 16px; border: none; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h4 class="mb-3" style="color: #1e293b; font-weight: 700;">
+                        <i class="glyphicon glyphicon-comment" style="margin-right: 10px; color: #3b82f6;"></i>
+                        遇到问题？我们随时为您服务
+                    </h4>
+                    <p class="mb-3" style="color: #64748b; line-height: 1.6;">
+                        如果您在使用数字水印系统过程中遇到任何问题或有任何建议，欢迎通过以下方式联系我们。我们将尽快为您解决问题。
+                    </p>
+                    <a href="{{ url_for('feedback') }}" class="btn btn-primary btn-lg" style="border-radius: 8px; padding: 12px 32px; font-weight: 600; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+                        <i class="glyphicon glyphicon-edit"></i> 提交问题反馈
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <div class="contact-info p-3" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                        <h5 class="mb-3" style="color: #1e293b; font-weight: 700; font-size: 1.1rem;">联系方式</h5>
+                        <div class="contact-item mb-2">
+                            <i class="glyphicon glyphicon-earphone" style="color: #3b82f6; margin-right: 8px;"></i>
+                            <strong>电话：</strong>
+                            <a href="tel:028-12345678" style="color: #3b82f6; text-decoration: none;">028-12345678</a>
+                        </div>
+                        <div class="contact-item mb-2">
+                            <i class="glyphicon glyphicon-envelope" style="color: #3b82f6; margin-right: 8px;"></i>
+                            <strong>邮箱：</strong>
+                            <a href="mailto:support@watermark.com" style="color: #3b82f6; text-decoration: none;">support@watermark.com</a>
+                        </div>
+                        <div class="contact-item">
+                            <i class="glyphicon glyphicon-time" style="color: #3b82f6; margin-right: 8px;"></i>
+                            <strong>服务时间：</strong>
+                            <span style="color: #64748b;">周一至周五 9:00-18:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    // 未登录引导交互：处理步骤引导流程中的所有点击事件
+    (function(){
+        // 通过隐藏标记读取登录状态，避免直接在脚本中出现 Jinja 花括号导致静态解析冲突
+        var authMeta = document.getElementById('auth-meta');
+        var IS_AUTH = authMeta && authMeta.getAttribute('data-auth') === '1';
+        if (!IS_AUTH) {
+            var loginUrl = '{{ url_for("signin") }}';
+            
+            function goLogin(nextTag){
+                try {
+                    var url = loginUrl + (nextTag ? ('?next=' + encodeURIComponent(nextTag)) : '');
+                    window.location.href = url;
+                } catch(e){ window.location.href = loginUrl; }
+            }
+            
+            // 平滑滚动到指定区域的函数
+            function smoothScrollTo(targetId) {
+                var targetEl = document.getElementById(targetId);
+                if (targetEl) {
+                    targetEl.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'start' 
+                    });
+                    // 滚动后添加高亮效果
+                    setTimeout(function() {
+                        targetEl.style.transition = 'box-shadow 0.5s ease';
+                        targetEl.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+                        setTimeout(function() {
+                            targetEl.style.boxShadow = '';
+                        }, 2000);
+                    }, 500);
+                }
+            }
+            
+            // 处理步骤按钮点击（立即登录、开始添加、验证水印等）
+            document.querySelectorAll('.step-btn').forEach(function(btn){
+                btn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    var action = this.getAttribute('data-action') || '';
+                    goLogin(action);
+                });
+            });
+            
+            // 处理媒体类型选择网格项点击 - 滚动到对应介绍区域
+            document.querySelectorAll('.media-type-item').forEach(function(item){
+                item.addEventListener('click', function(e){
+                    e.preventDefault();
+                    var mediaType = this.getAttribute('data-type') || '';
+                    var sectionId = 'section-' + mediaType;
+                    smoothScrollTo(sectionId);
+                });
+            });
+            
+            // 处理登录提示中的链接点击
+            var loginPromptLink = document.querySelector('.login-prompt a');
+            if (loginPromptLink) {
+                loginPromptLink.addEventListener('click', function(e){
+                    e.preventDefault();
+                    goLogin('');
+                });
+            }
+            
+            // 添加引导流程的淡入动画
+            var guideContainer = document.querySelector('.guide-flow-container');
+            if (guideContainer) {
+                guideContainer.style.opacity = '0';
+                guideContainer.style.transform = 'translateY(20px)';
+                setTimeout(function(){
+                    guideContainer.style.transition = 'all 0.6s ease';
+                    guideContainer.style.opacity = '1';
+                    guideContainer.style.transform = 'translateY(0)';
+                }, 100);
+            }
+            
+            // 添加详细介绍卡片的淡入动画
+            var detailCards = document.querySelectorAll('.media-detail-card');
+            detailCards.forEach(function(card, index) {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(30px)';
+                setTimeout(function() {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 200 + (index * 100));
+            });
+        }
+    })();
+    
+    // 登录后的引导卡片淡入动画
+    (function() {
+        var authMeta = document.getElementById('auth-meta');
+        var IS_AUTH = authMeta && authMeta.getAttribute('data-auth') === '1';
+        if (IS_AUTH) {
+            // 为登录后的引导流程添加淡入动画
+            var guideContainer = document.querySelector('.guide-flow-container');
+            if (guideContainer) {
+                guideContainer.style.opacity = '0';
+                guideContainer.style.transform = 'translateY(20px)';
+                setTimeout(function(){
+                    guideContainer.style.transition = 'all 0.6s ease';
+                    guideContainer.style.opacity = '1';
+                    guideContainer.style.transform = 'translateY(0)';
+                }, 100);
+            }
+        }
+    })();
+    
     (function() {
         // 折线图（固定高度，避免自适应导致重排）
         var lineEl = document.getElementById('uploadsLine');

@@ -133,6 +133,77 @@ class AlgorithmSelector:
             result = extract_func(file_path, algorithm)
             return result
 
+    def extract_watermark_try_all(self, file_path):
+        """尝试所有算法提取水印，直到成功"""
+        # 获取文件后缀和类型
+        _, extension = os.path.splitext(file_path)
+        extension = extension[1:].lower()
+        file_type = get_file_type_by_extension(extension)
+        
+        if not file_type:
+            raise ValueError(f"不支持的文件后缀: {extension}")
+        
+        if file_type not in self.modules:
+            raise ValueError(f"不支持的文件类型: {file_type}")
+        
+        # 获取该文件类型的所有已实现算法
+        implemented_algorithms = get_implemented_algorithms(extension)
+        
+        if not implemented_algorithms:
+            raise Exception(f"文件后缀 {extension} 没有可用的算法")
+        
+        # 优先尝试默认算法
+        default_algorithm = get_default_algorithm(extension)
+        if default_algorithm in implemented_algorithms:
+            algorithms_to_try = [default_algorithm] + [alg for alg in implemented_algorithms if alg != default_algorithm]
+        else:
+            algorithms_to_try = implemented_algorithms
+        
+        # 获取对应的模块
+        module = self.modules[file_type]
+        extract_func = getattr(module, "extract")
+        
+        # 收集每个算法的尝试结果
+        attempt_results = []
+        
+        # 尝试每个算法
+        for algorithm in algorithms_to_try:
+            try:
+                self.logger.info(f"尝试使用算法 {algorithm} 提取水印 from {file_path}")
+                result = extract_func(file_path, algorithm)
+                
+                # 检查结果是否有效
+                if result and result.strip():
+                    self.logger.info(f"算法 {algorithm} 成功提取水印: {result}")
+                    attempt_results.append({
+                        'algorithm': algorithm,
+                        'status': 'success',
+                        'message': f'成功提取水印'
+                    })
+                    return result, algorithm, attempt_results
+                else:
+                    error_msg = f"提取结果为空"
+                    self.logger.warning(f"算法 {algorithm} {error_msg}")
+                    attempt_results.append({
+                        'algorithm': algorithm,
+                        'status': 'empty',
+                        'message': error_msg
+                    })
+                    
+            except Exception as e:
+                error_msg = str(e)
+                self.logger.error(f"算法 {algorithm} 提取失败: {error_msg}")
+                attempt_results.append({
+                    'algorithm': algorithm,
+                    'status': 'error',
+                    'message': error_msg
+                })
+                continue
+        
+        # 所有算法都失败了
+        error_msg = f"尝试了所有可用算法 {algorithms_to_try}，均无法提取水印"
+        raise Exception(error_msg, attempt_results)
+
 
 
 

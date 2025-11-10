@@ -4,6 +4,7 @@ import mimetypes
 import os
 import random
 import re
+import shutil
 from datetime import datetime, timedelta
 from watermark.utils.time_provider import get_now_utc
 
@@ -85,72 +86,6 @@ def calculate_file_hash(file_path):
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
-
-def check_file_hash_duplicate(file_path, file_hash, current_user_id, file_type):
-    """
-    检查文件哈希重复情况
-    
-    返回: (result, existing_file_record, error_message)
-    - result: 'duplicate_unwatermarked' | 'duplicate_watermarked' | 'matched_unwatermarked_other_user' | 'matched_watermarked_other_user' | 'matched_watermarked' | 'matched_watermarked_user_exists' | 'new'
-    - existing_file_record: 如果找到匹配的文件记录则返回，否则为None
-    - error_message: 错误消息，如果没有错误则为None
-    """
-    # 1. 检查当前用户是否有相同file_hash且has_watermark=False的文件
-    duplicate_unwatermarked = File.query.filter(
-        File.file_hash == file_hash,
-        File.uploader_id == current_user_id,
-        File.file_type == file_type,
-        File.has_watermark == False
-    ).first()
-    
-    if duplicate_unwatermarked:
-        print("0")
-        return ('duplicate_unwatermarked', duplicate_unwatermarked, None)
-    
-    # 2. 检查当前用户是否有相同file_hash且has_watermark=True的文件
-    duplicate_watermarked = File.query.filter(
-        File.file_hash == file_hash,
-        File.uploader_id == current_user_id,
-        File.file_type == file_type,
-        File.has_watermark == True
-    ).first()
-     
-    if duplicate_watermarked:
-        print("1")
-        return ('duplicate_watermarked', duplicate_watermarked, None)
-    
-    # 3. 检查是否有其他用户的未加水印文件具有相同的file_hash
-    matched_unwatermarked_other_user = File.query.filter(
-        File.file_hash == file_hash,
-        File.uploader_id != current_user_id,
-        File.file_type == file_type,
-        File.has_watermark == False
-    ).first()
-     
-    if matched_unwatermarked_other_user:
-        print("2")
-        return ('matched_unwatermarked_other_user', matched_unwatermarked_other_user, None)
-    
-    # 4. 取消基于 file_hash 的“他人已加水印文件”匹配，避免原图误判为已加水印
-    # 保留仅基于 file_watermark_hash 的已加水印判断
-    
-    # 5. 检查是否有其他用户的文件具有相同的file_watermark_hash
-    # 即上传的文件是一个已加水印的文件，其他用户已经上传过相同的水印文件
-    matched_watermarked_other_user = File.query.filter(
-        File.file_watermark_hash == file_hash,
-        File.uploader_id != current_user_id,
-        File.file_type == file_type,
-        File.has_watermark == True,
-        File.file_watermark_hash.isnot(None)
-    ).first()
-    
-    if matched_watermarked_other_user:
-        print("3") 
-        # 检查当前用户是否已经有引用这个水印文件的记录
-        return ('matched_watermarked_other_user', matched_watermarked_other_user, None)
-    
-    # 6. 没有重复，是新文件
-    return ('new', None, None)
 
 def handle_file_upload(file, media_type, save_to_temp=True):
     """
@@ -304,6 +239,35 @@ def process_watermark(file_path, watermark_text, operation_type='embed', file_id
             return extracted_text, None, None
     except Exception as e:
         return None, None, str(e)
+
+def process_watermark_try_all_algorithms(file_path):
+    """尝试所有算法提取水印"""
+    try:
+        selector = AlgorithmSelector()
+        extracted_text, algorithm, attempt_results = selector.extract_watermark_try_all(file_path)
+        
+        # 确保返回的是字符串类型
+        if extracted_text is not None:
+            # 如果是numpy数组，转换为字符串
+            if hasattr(extracted_text, 'tolist'):
+                extracted_text = str(extracted_text.tolist())
+            # 如果是bytes，解码为字符串
+            elif isinstance(extracted_text, bytes):
+                try:
+                    extracted_text = extracted_text.decode('utf-8')
+                except UnicodeDecodeError:
+                    extracted_text = str(extracted_text)
+            # 如果是其他类型，转换为字符串
+            elif not isinstance(extracted_text, str):
+                extracted_text = str(extracted_text)
+        
+        return extracted_text, algorithm, None, attempt_results
+    except Exception as e:
+        # 如果异常包含 attempt_results，提取出来
+        attempt_results = []
+        if hasattr(e, 'args') and len(e.args) > 1:
+            attempt_results = e.args[1]
+        return None, None, str(e.args[0] if hasattr(e, 'args') and e.args else e), attempt_results
 
 def get_user_files(user, file_type, has_watermark=None):
     """获取用户的文件列表"""
@@ -470,14 +434,17 @@ def index():
         # 首页个人文件分页（不区分类型）
         unwatermarked_page = request.args.get('unwatermarked_page', 1, type=int)
         watermarked_page = request.args.get('watermarked_page', 1, type=int)
-        user_unwatermarked_pagination = get_user_all_files_pagination(
-            current_user, has_watermark=False, page=unwatermarked_page, per_page=5
+        all_uploaded_page = request.args.get('all_uploaded_page', 1, type=int)
+        
+        # 获取所有已上传的文件（不论是否加水印）
+        user_all_uploaded_pagination = get_user_all_files_pagination(
+            current_user, has_watermark=None, page=all_uploaded_page, per_page=5
         )
         user_watermarked_pagination = get_user_all_files_pagination(
             current_user, has_watermark=True, page=watermarked_page, per_page=5
         )
     else:
-        user_unwatermarked_pagination = None
+        user_all_uploaded_pagination = None
         user_watermarked_pagination = None
 
     return render_template(
@@ -497,7 +464,7 @@ def index():
         user_type_values=user_type_values,
         user_timeseries_labels=user_timeseries_labels,
         user_timeseries_counts=user_timeseries_counts,
-        user_unwatermarked_pagination=user_unwatermarked_pagination,
+        user_all_uploaded_pagination=user_all_uploaded_pagination,
         user_watermarked_pagination=user_watermarked_pagination
         , type_labels=type_labels
         , type_values=type_values
@@ -764,170 +731,20 @@ def image_upload():
         temp_file_path, error, file_info = handle_file_upload(file, 'image', save_to_temp=True)
         if error:
             return jsonify({'error': error})
-        
-        # 检查文件哈希重复情况（此时文件还在临时目录）
-        result, existing_file, error_message = check_file_hash_duplicate(
-            temp_file_path, file_info['file_hash'], current_user.id, 'image'
+
+        final_file_path = move_file_to_final_location(
+            temp_file_path, 'image', file_info['unique_filename']
         )
-        
-        if result == 'duplicate_unwatermarked':
-            # 重复的未添加水印文件，删除临时文件，更新已有记录的更新时间
+
+        if not final_file_path:
             try:
                 if os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
             except Exception:
                 pass
-            # 更新已有记录的更新时间
-            existing_file.updated_at = get_now_utc()
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': '已存在未添加水印文件',
-                'file_id': existing_file.id,
-                'file_type': 'image',
-                'has_watermark': False,
-                'filename': existing_file.filename
-            })
-        
-        elif result == 'duplicate_watermarked':
-            # 重复的已添加水印文件，删除临时文件，更新已有记录的更新时间
-            try:
-                if os.path.exists(temp_file_path):
-                    os.remove(temp_file_path)
-            except Exception:
-                pass
-            # 更新已有记录的更新时间
-            existing_file.updated_at = get_now_utc()
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': '已存在已添加水印文件',
-                'file_id': existing_file.id,
-                'file_type': 'image',
-                'has_watermark': True,
-                'filename': existing_file.filename
-            })
-        
-        elif result == 'matched_unwatermarked_other_user':
-            # 匹配到其他用户的未加水印文件，移动到upload目录，创建新记录
-            try:
-                final_file_path = move_file_to_final_location(
-                    temp_file_path, 'image', file_info['unique_filename']
-                )
-                
-                if not final_file_path:
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': '文件移动失败'})
-                
-                file_record = File(
-                    filename=file_info['filename'],
-                    original_path=final_file_path,
-                    file_hash=file_info['file_hash'],
-                    file_type='image',
-                    file_format=file_info['file_format'],
-                    file_size=file_info['file_size'],
-                    mime_type=file_info['mime_type'],
-                    uploader_id=current_user.id,
-                    group_id=current_user.groups[0].id if current_user.groups else None,
-                    processing_status='pending',
-                    has_watermark=False
-                )
-                db.session.add(file_record)
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '文件上传成功（匹配到其他用户的未加水印文件）',
-                    'file_id': file_record.id,
-                    'file_type': 'image',
-                    'has_watermark': False,
-                    'filename': file_info['filename']
-                })
-            except Exception as e:
-                db.session.rollback()
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                return jsonify({'error': f'保存文件记录失败: {str(e)}'})
-        
-        elif result == 'matched_watermarked_other_user':
-            # 匹配到其他用户的已加水印文件，移动到embed目录，创建新记录
-            try:
-                embed_file_path = move_file_to_embed_location(
-                    temp_file_path, 'image', file_info['unique_filename']
-                )
-                
-                if not embed_file_path:
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': '文件移动到embed目录失败'})
-                
-                file_record = File(
-                    filename=file_info['filename'],
-                    original_path=embed_file_path,
-                    file_hash=file_info['file_hash'],
-                    file_watermark_hash=existing_file.file_watermark_hash if existing_file.file_watermark_hash else file_info['file_hash'],
-                    file_type='image',
-                    file_format=file_info['file_format'],
-                    file_size=file_info['file_size'],
-                    mime_type=file_info['mime_type'],
-                    uploader_id=current_user.id,
-                    group_id=current_user.groups[0].id if current_user.groups else None,
-                    processing_status='completed',
-                    has_watermark=True,
-                    watermark_type=existing_file.watermark_type,
-                    watermark_text=existing_file.watermark_text,
-                    original_watermark_text=existing_file.original_watermark_text,
-                    watermark_seed=existing_file.watermark_seed,
-                    watermarked_path=embed_file_path
-                )
-                db.session.add(file_record)
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '文件上传成功（匹配到其他用户的已加水印文件）',
-                    'file_id': file_record.id,
-                    'file_type': 'image',
-                    'has_watermark': True,
-                    'filename': file_info['filename']
-                })
-            except Exception as e:
-                db.session.rollback()
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                return jsonify({'error': f'保存文件记录失败: {str(e)}'})
-        
-        
-        else:
-            # 新文件，移动到最终目录并创建记录
-            final_file_path = move_file_to_final_location(
-                temp_file_path, 'image', file_info['unique_filename']
-            )
-            
-            if not final_file_path:
-                # 移动失败，删除临时文件
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                return jsonify({'error': '文件移动失败'})
-            
+            return jsonify({'error': '文件移动失败'})
+
+        try:
             file_record = File(
                 filename=file_info['filename'],
                 original_path=final_file_path,
@@ -943,15 +760,23 @@ def image_upload():
             )
             db.session.add(file_record)
             db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': '文件上传成功',
-                'file_id': file_record.id,
-                'file_type': 'image',
-                'has_watermark': False,
-                'filename': file_info['filename']
-            })
+        except Exception as e:
+            db.session.rollback()
+            try:
+                if os.path.exists(final_file_path):
+                    os.remove(final_file_path)
+            except Exception:
+                pass
+            return jsonify({'error': f'保存文件记录失败: {str(e)}'})
+
+        return jsonify({
+            'success': True,
+            'message': '文件上传成功',
+            'file_id': file_record.id,
+            'file_type': 'image',
+            'has_watermark': False,
+            'filename': file_info['filename']
+        })
     
     # 获取用户的图片文件列表（分页，分未加水印/已加水印）
     page = request.args.get('page', 1, type=int)
@@ -1001,6 +826,7 @@ def image_add_watermark():
         
         success_count = 0
         error_count = 0
+        error_details = []  # 收集错误详情
         
         for file in files:
             try:
@@ -1014,30 +840,59 @@ def image_add_watermark():
                 )
                 
                 if result and not error:
-                    file.watermarked_path = result
-                    file.file_watermark_hash = calculate_file_hash(file.watermarked_path)
-                    file.has_watermark = True
-                    file.watermark_type = algorithm
-                    file.watermark_text = form.watermark.data
+                    # 创建新的文件记录表示已添加水印的版本
+                    watermarked_file = File(
+                        filename=file.filename,
+                        original_path=file.original_path,  # 保持相同的原始路径引用
+                        watermarked_path=result,
+                        file_hash=file.file_hash,  # 复制原文件的hash
+                        file_watermark_hash=calculate_file_hash(result),
+                        file_type=file.file_type,
+                        file_format=file.file_format,
+                        file_size=file.file_size,
+                        mime_type=file.mime_type,  # 复制mime_type
+                        uploader_id=current_user.id,
+                        has_watermark=True,
+                        watermark_type=algorithm,
+                        watermark_text=form.watermark.data,
+                        processing_status='completed',
+                        error_message=None
+                    )
+                    db.session.add(watermarked_file)
+                    
+                    # 原文件保持 has_watermark=False，只更新处理状态
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
+                    error_message = error or '水印处理失败'
                     file.processing_status = 'failed'
-                    file.error_message = error or '水印处理失败'
+                    file.error_message = error_message
                     error_count += 1
+                    error_details.append({
+                        'filename': file.filename,
+                        'error': error_message
+                    })
                     
             except Exception as e:
+                error_message = str(e)
                 file.processing_status = 'failed'
-                file.error_message = str(e)
+                file.error_message = error_message
                 error_count += 1
+                error_details.append({
+                    'filename': file.filename,
+                    'error': error_message
+                })
         
         db.session.commit()
         
-        if success_count > 0:
-            flash(f"成功处理 {success_count} 个文件")
-        if error_count > 0:
-            flash(f"处理失败 {error_count} 个文件")
+        # 将结果存储到 session 中
+        session['embed_result'] = {
+            'success_count': success_count,
+            'error_count': error_count,
+            'error_details': error_details,
+            'total_count': len(files)
+        }
         
         return redirect(url_for('image_add_watermark'))
     
@@ -1056,10 +911,14 @@ def image_add_watermark():
         current_user, 'image', has_watermark=True, page=watermarked_page, per_page=per_page
     )
     
+    # 获取嵌入结果并清除
+    embed_result = session.pop('embed_result', None)
+    
     return render_template('image/add_watermark.html', 
                          form=form, 
                          unwatermarked_pagination=unwatermarked_pagination,
-                         watermarked_pagination=watermarked_pagination)
+                         watermarked_pagination=watermarked_pagination,
+                         embed_result=embed_result)
 
 @app.route('/image/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1102,7 +961,7 @@ def image_extract_watermark():
             return jsonify({'error': '没有选择文件'})
         
         # 使用通用文件上传处理函数
-        file_path, error = handle_file_upload(file, 'image')
+        file_path, error, _ = handle_file_upload(file, 'image')
         if error:
             return jsonify({'error': error})
         
@@ -1117,16 +976,23 @@ def image_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表（分页）
+    # 获取未添加水印的文件列表（待处理的文件）
     page = request.args.get('page', 1, type=int)
     per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'image', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件列表（分页）
     watermarked_pagination = get_user_files_pagination(
         current_user, 'image', has_watermark=True, page=page, per_page=per_page
     )
+    
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('image/extract_watermark.html',
+                         unwatermarked_pagination=unwatermarked_pagination,
                          watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
@@ -1154,6 +1020,67 @@ def image_extract_from_file(file_id):
         'extracted_text': extracted_text
     })
 
+@app.route('/image/extract_from_unwatermarked_file/<int:file_id>')
+@login_required
+def image_extract_from_unwatermarked_file(file_id):
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
+    
+    # 尝试所有算法从原始文件提取水印
+    extracted_text, algorithm, error, attempt_results = process_watermark_try_all_algorithms(
+        file_record.original_path
+    )
+    
+    if error:
+        return jsonify({
+            'error': f'水印提取失败: {error}',
+            'attempt_results': attempt_results
+        })
+    
+    # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
+    try:
+        # 获取用户的 embed 目录
+        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'image')
+        
+        # 生成唯一的文件名（保持原始扩展名）
+        file_ext = os.path.splitext(file_record.filename)[1]
+        unique_filename = f"{file_record.file_hash}_embed{file_ext}"
+        embed_file_path = os.path.join(user_embed_dir, unique_filename)
+        
+        # 复制文件到 embed 目录
+        shutil.copy2(file_record.original_path, embed_file_path)
+        
+        watermarked_file = File(
+            filename=file_record.filename,
+            original_path=file_record.original_path,
+            watermarked_path=embed_file_path,  # 使用 embed 目录下的路径
+            file_hash=file_record.file_hash,
+            file_watermark_hash=file_record.file_hash,
+            file_type=file_record.file_type,
+            file_format=file_record.file_format,
+            file_size=file_record.file_size,
+            mime_type=file_record.mime_type,
+            uploader_id=current_user.id,
+            has_watermark=True,
+            watermark_type=algorithm or 'Unknown',
+            watermark_text=extracted_text,
+            processing_status='completed'
+        )
+        db.session.add(watermarked_file)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating watermarked file record: {e}")
+    
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text,
+        'algorithm': algorithm,
+        'attempt_results': attempt_results
+    })
+
 # 音频处理相关路由
 @app.route('/audio/process')
 @login_required
@@ -1178,204 +1105,54 @@ def audio_upload():
         temp_file_path, error, file_info = handle_file_upload(f, 'audio', save_to_temp=True)
         if error:
             return jsonify({'error': error}), 400
-        
-        try:
-            # 检查文件哈希重复情况（此时文件还在临时目录）
-            result, existing_file, error_message = check_file_hash_duplicate(
-                temp_file_path, file_info['file_hash'], current_user.id, 'audio'
-            )
-            
-            if result == 'duplicate_unwatermarked':
-                # 重复的未添加水印文件，删除临时文件，更新已有记录的更新时间
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                # 更新已有记录的更新时间
-                existing_file.updated_at = get_now_utc()
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '已存在未添加水印文件',
-                    'file_id': existing_file.id,
-                    'filename': existing_file.filename,
-                    'file_type': 'audio',
-                    'has_watermark': False
-                })
-            
-            elif result == 'duplicate_watermarked':
-                # 重复的已添加水印文件，删除临时文件，更新已有记录的更新时间
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                # 更新已有记录的更新时间
-                existing_file.updated_at = get_now_utc()
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '已存在已添加水印文件',
-                    'file_id': existing_file.id,
-                    'filename': existing_file.filename,
-                    'file_type': 'audio',
-                    'has_watermark': True
-                })
-            
-            elif result == 'matched_unwatermarked_other_user':
-                # 匹配到其他用户的未加水印文件，移动到upload目录，创建新记录
-                try:
-                    final_file_path = move_file_to_final_location(
-                        temp_file_path, 'audio', file_info['unique_filename']
-                    )
-                    
-                    if not final_file_path:
-                        try:
-                            if os.path.exists(temp_file_path):
-                                os.remove(temp_file_path)
-                        except Exception:
-                            pass
-                        return jsonify({'error': '文件移动失败'}), 500
-                    
-                    file_record = File(
-                        filename=file_info['filename'],
-                        original_path=final_file_path,
-                        file_hash=file_info['file_hash'],
-                        file_type='audio',
-                        file_format=file_info['file_format'],
-                        file_size=file_info['file_size'],
-                        mime_type=file_info['mime_type'],
-                        uploader_id=current_user.id,
-                        group_id=current_user.groups[0].id if current_user.groups else None,
-                        processing_status='pending',
-                        has_watermark=False
-                    )
-                    db.session.add(file_record)
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': '文件上传成功（匹配到其他用户的未加水印文件）',
-                        'file_id': file_record.id,
-                        'file_type': 'audio',
-                        'has_watermark': False,
-                        'filename': file_info['filename']
-                    })
-                except Exception as e:
-                    db.session.rollback()
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
-            
-            elif result == 'matched_watermarked_other_user':
-                # 匹配到其他用户的已加水印文件，移动到embed目录，创建新记录
-                try:
-                    embed_file_path = move_file_to_embed_location(
-                        temp_file_path, 'audio', file_info['unique_filename']
-                    )
-                    
-                    if not embed_file_path:
-                        try:
-                            if os.path.exists(temp_file_path):
-                                os.remove(temp_file_path)
-                        except Exception:
-                            pass
-                        return jsonify({'error': '文件移动到embed目录失败'}), 500
-                    
-                    file_record = File(
-                        filename=file_info['filename'],
-                        original_path=embed_file_path,
-                        file_hash=file_info['file_hash'],
-                        file_watermark_hash=existing_file.file_watermark_hash if existing_file.file_watermark_hash else file_info['file_hash'],
-                        file_type='audio',
-                        file_format=file_info['file_format'],
-                        file_size=file_info['file_size'],
-                        mime_type=file_info['mime_type'],
-                        uploader_id=current_user.id,
-                        group_id=current_user.groups[0].id if current_user.groups else None,
-                        processing_status='completed',
-                        has_watermark=True,
-                        watermark_type=existing_file.watermark_type,
-                        watermark_text=existing_file.watermark_text,
-                        original_watermark_text=existing_file.original_watermark_text,
-                        watermark_seed=existing_file.watermark_seed,
-                        watermarked_path=embed_file_path
-                    )
-                    db.session.add(file_record)
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': '文件上传成功（匹配到其他用户的已加水印文件）',
-                        'file_id': file_record.id,
-                        'file_type': 'audio',
-                        'has_watermark': True,
-                        'filename': file_info['filename']
-                    })
-                except Exception as e:
-                    db.session.rollback()
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
-            
-            
-            else:
-                # 新文件，移动到最终目录并创建记录
-                final_file_path = move_file_to_final_location(
-                    temp_file_path, 'audio', file_info['unique_filename']
-                )
-                
-                if not final_file_path:
-                    # 移动失败，删除临时文件
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': '文件移动失败'}), 500
-                
-                file_record = File(
-                    filename=file_info['filename'],
-                    original_path=final_file_path,
-                    file_hash=file_info['file_hash'],
-                    file_type='audio',
-                    file_format=file_info['file_format'],
-                    file_size=file_info['file_size'],
-                    mime_type=file_info['mime_type'],
-                    uploader_id=current_user.id,
-                    group_id=current_user.groups[0].id if current_user.groups else None,
-                    processing_status='pending'
-                )
-                
-                db.session.add(file_record)
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '文件上传成功',
-                    'file_id': file_record.id,
-                    'filename': file_info['filename'],
-                    'file_type': 'audio',
-                    'has_watermark': False
-                })
-            
-        except Exception as e:
-            # 确保临时文件被清理
+
+        final_file_path = move_file_to_final_location(
+            temp_file_path, 'audio', file_info['unique_filename']
+        )
+
+        if not final_file_path:
             try:
-                if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                if os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
             except Exception:
                 pass
-            return jsonify({'error': f'上传失败: {str(e)}'}), 500
+            return jsonify({'error': '文件移动失败'}), 500
+
+        try:
+            file_record = File(
+                filename=file_info['filename'],
+                original_path=final_file_path,
+                file_hash=file_info['file_hash'],
+                file_type='audio',
+                file_format=file_info['file_format'],
+                file_size=file_info['file_size'],
+                mime_type=file_info['mime_type'],
+                uploader_id=current_user.id,
+                group_id=current_user.groups[0].id if current_user.groups else None,
+                processing_status='pending',
+                has_watermark=False
+            )
+
+            db.session.add(file_record)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            try:
+                if os.path.exists(final_file_path):
+                    os.remove(final_file_path)
+            except Exception:
+                pass
+            return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': '文件上传成功',
+            'file_id': file_record.id,
+            'filename': file_info['filename'],
+            'file_type': 'audio',
+            'has_watermark': False
+        })
+        
     
     # 获取用户的音频文件列表（分页，分未加水印/已加水印）
     page = request.args.get('page', 1, type=int)
@@ -1425,6 +1202,7 @@ def audio_add_watermark():
         
         success_count = 0
         error_count = 0
+        error_details = []
         
         for file in files:
             try:
@@ -1438,30 +1216,59 @@ def audio_add_watermark():
                 )
                 
                 if result and not error:
-                    file.watermarked_path = result
-                    file.file_watermark_hash = calculate_file_hash(file.watermarked_path)
-                    file.has_watermark = True
-                    file.watermark_type = algorithm
-                    file.watermark_text = form.watermark.data
+                    # 创建新的文件记录表示已添加水印的版本
+                    watermarked_file = File(
+                        filename=file.filename,
+                        original_path=file.original_path,  # 保持相同的原始路径引用
+                        watermarked_path=result,
+                        file_hash=file.file_hash,  # 复制原文件的hash
+                        file_watermark_hash=calculate_file_hash(result),
+                        file_type=file.file_type,
+                        file_format=file.file_format,
+                        file_size=file.file_size,
+                        mime_type=file.mime_type,  # 复制mime_type
+                        uploader_id=current_user.id,
+                        has_watermark=True,
+                        watermark_type=algorithm,
+                        watermark_text=form.watermark.data,
+                        processing_status='completed',
+                        error_message=None
+                    )
+                    db.session.add(watermarked_file)
+                    
+                    # 原文件保持 has_watermark=False，只更新处理状态
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
+                    error_message = error or '水印处理失败'
                     file.processing_status = 'failed'
-                    file.error_message = error or '水印处理失败'
+                    file.error_message = error_message
                     error_count += 1
+                    error_details.append({
+                        'filename': file.filename,
+                        'error': error_message
+                    })
                     
             except Exception as e:
+                error_message = str(e)
                 file.processing_status = 'failed'
-                file.error_message = str(e)
+                file.error_message = error_message
                 error_count += 1
+                error_details.append({
+                    'filename': file.filename,
+                    'error': error_message
+                })
         
         db.session.commit()
         
-        if success_count > 0:
-            flash(f"成功处理 {success_count} 个文件")
-        if error_count > 0:
-            flash(f"处理失败 {error_count} 个文件")
+        # 将结果存储到 session 中
+        session['embed_result'] = {
+            'success_count': success_count,
+            'error_count': error_count,
+            'error_details': error_details,
+            'total_count': len(files)
+        }
         
         return redirect(url_for('audio_add_watermark'))
     
@@ -1480,10 +1287,14 @@ def audio_add_watermark():
         current_user, 'audio', has_watermark=True, page=watermarked_page, per_page=per_page
     )
     
+    # 获取嵌入结果并清除
+    embed_result = session.pop('embed_result', None)
+    
     return render_template('audio/add_watermark.html', 
                          form=form, 
                          unwatermarked_pagination=unwatermarked_pagination,
-                         watermarked_pagination=watermarked_pagination)
+                         watermarked_pagination=watermarked_pagination,
+                         embed_result=embed_result)
 
 @app.route('/audio/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1526,7 +1337,7 @@ def audio_extract_watermark():
             return jsonify({'error': '没有选择文件'})
         
         # 使用通用文件上传处理函数
-        file_path, error = handle_file_upload(file, 'audio')
+        file_path, error, _ = handle_file_upload(file, 'audio')
         if error:
             return jsonify({'error': error})
         
@@ -1541,16 +1352,23 @@ def audio_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表（分页）
+    # 获取未添加水印的文件列表（待处理的文件）
     page = request.args.get('page', 1, type=int)
     per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'audio', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件列表（分页）
     watermarked_pagination = get_user_files_pagination(
         current_user, 'audio', has_watermark=True, page=page, per_page=per_page
     )
+    
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('audio/extract_watermark.html',
+                         unwatermarked_pagination=unwatermarked_pagination,
                          watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
@@ -1578,6 +1396,67 @@ def audio_extract_from_file(file_id):
         'extracted_text': extracted_text
     })
 
+@app.route('/audio/extract_from_unwatermarked_file/<int:file_id>')
+@login_required
+def audio_extract_from_unwatermarked_file(file_id):
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
+    
+    # 尝试所有算法从原始文件提取水印
+    extracted_text, algorithm, error, attempt_results = process_watermark_try_all_algorithms(
+        file_record.original_path
+    )
+    
+    if error:
+        return jsonify({
+            'error': f'水印提取失败: {error}',
+            'attempt_results': attempt_results
+        })
+    
+    # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
+    try:
+        # 获取用户的 embed 目录
+        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'audio')
+        
+        # 生成唯一的文件名（保持原始扩展名）
+        file_ext = os.path.splitext(file_record.filename)[1]
+        unique_filename = f"{file_record.file_hash}_embed{file_ext}"
+        embed_file_path = os.path.join(user_embed_dir, unique_filename)
+        
+        # 复制文件到 embed 目录
+        shutil.copy2(file_record.original_path, embed_file_path)
+        
+        watermarked_file = File(
+            filename=file_record.filename,
+            original_path=file_record.original_path,
+            watermarked_path=embed_file_path,  # 使用 embed 目录下的路径
+            file_hash=file_record.file_hash,
+            file_watermark_hash=file_record.file_hash,
+            file_type=file_record.file_type,
+            file_format=file_record.file_format,
+            file_size=file_record.file_size,
+            mime_type=file_record.mime_type,
+            uploader_id=current_user.id,
+            has_watermark=True,
+            watermark_type=algorithm or 'Unknown',
+            watermark_text=extracted_text,
+            processing_status='completed'
+        )
+        db.session.add(watermarked_file)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating watermarked file record: {e}")
+    
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text,
+        'algorithm': algorithm,
+        'attempt_results': attempt_results
+    })
+
 # 视频处理相关路由
 @app.route('/video/process')
 @login_required
@@ -1596,203 +1475,53 @@ def video_upload():
         temp_file_path, error, file_info = handle_file_upload(f, 'video', save_to_temp=True)
         if error:
             return jsonify({'error': error}), 400
-        
-        try:
-            # 检查文件哈希重复情况（此时文件还在临时目录）
-            result, existing_file, error_message = check_file_hash_duplicate(
-                temp_file_path, file_info['file_hash'], current_user.id, 'video'
-            )
-            
-            if result == 'duplicate_unwatermarked':
-                # 重复的未添加水印文件，删除临时文件，更新已有记录的更新时间
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                # 更新已有记录的更新时间
-                existing_file.updated_at = get_now_utc()
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '已存在未添加水印文件',
-                    'file_id': existing_file.id,
-                    'filename': existing_file.filename,
-                    'file_type': 'video',
-                    'has_watermark': False
-                })
-            
-            elif result == 'duplicate_watermarked':
-                # 重复的已添加水印文件，删除临时文件，更新已有记录的更新时间
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                # 更新已有记录的更新时间
-                existing_file.updated_at = get_now_utc()
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '已存在已添加水印文件',
-                    'file_id': existing_file.id,
-                    'filename': existing_file.filename,
-                    'file_type': 'video',
-                    'has_watermark': True
-                })
-            
-            elif result == 'matched_unwatermarked_other_user':
-                # 匹配到其他用户的未加水印文件，移动到upload目录，创建新记录
-                try:
-                    final_file_path = move_file_to_final_location(
-                        temp_file_path, 'video', file_info['unique_filename']
-                    )
-                    
-                    if not final_file_path:
-                        try:
-                            if os.path.exists(temp_file_path):
-                                os.remove(temp_file_path)
-                        except Exception:
-                            pass
-                        return jsonify({'error': '文件移动失败'}), 500
-                    
-                    file_record = File(
-                        filename=file_info['filename'],
-                        original_path=final_file_path,
-                        file_hash=file_info['file_hash'],
-                        file_type='video',
-                        file_format=file_info['file_format'],
-                        file_size=file_info['file_size'],
-                        mime_type=file_info['mime_type'],
-                        uploader_id=current_user.id,
-                        group_id=current_user.groups[0].id if current_user.groups else None,
-                        processing_status='pending',
-                        has_watermark=False
-                    )
-                    db.session.add(file_record)
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': '文件上传成功（匹配到其他用户的未加水印文件）',
-                        'file_id': file_record.id,
-                        'file_type': 'video',
-                        'has_watermark': False,
-                        'filename': file_info['filename']
-                    })
-                except Exception as e:
-                    db.session.rollback()
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
-            
-            elif result == 'matched_watermarked_other_user':
-                # 匹配到其他用户的已加水印文件，移动到embed目录，创建新记录
-                try:
-                    embed_file_path = move_file_to_embed_location(
-                        temp_file_path, 'video', file_info['unique_filename']
-                    )
-                    
-                    if not embed_file_path:
-                        try:
-                            if os.path.exists(temp_file_path):
-                                os.remove(temp_file_path)
-                        except Exception:
-                            pass
-                        return jsonify({'error': '文件移动到embed目录失败'}), 500
-                    
-                    file_record = File(
-                        filename=file_info['filename'],
-                        original_path=embed_file_path,
-                        file_hash=file_info['file_hash'],
-                        file_watermark_hash=existing_file.file_watermark_hash if existing_file.file_watermark_hash else file_info['file_hash'],
-                        file_type='video',
-                        file_format=file_info['file_format'],
-                        file_size=file_info['file_size'],
-                        mime_type=file_info['mime_type'],
-                        uploader_id=current_user.id,
-                        group_id=current_user.groups[0].id if current_user.groups else None,
-                        processing_status='completed',
-                        has_watermark=True,
-                        watermark_type=existing_file.watermark_type,
-                        watermark_text=existing_file.watermark_text,
-                        original_watermark_text=existing_file.original_watermark_text,
-                        watermark_seed=existing_file.watermark_seed,
-                        watermarked_path=embed_file_path
-                    )
-                    db.session.add(file_record)
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': '文件上传成功（匹配到其他用户的已加水印文件）',
-                        'file_id': file_record.id,
-                        'file_type': 'video',
-                        'has_watermark': True,
-                        'filename': file_info['filename']
-                    })
-                except Exception as e:
-                    db.session.rollback()
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
-            
-            else:
-                # 新文件，移动到最终目录并创建记录
-                final_file_path = move_file_to_final_location(
-                    temp_file_path, 'video', file_info['unique_filename']
-                )
-                
-                if not final_file_path:
-                    # 移动失败，删除临时文件
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': '文件移动失败'}), 500
-                
-                file_record = File(
-                    filename=file_info['filename'],
-                    original_path=final_file_path,
-                    file_hash=file_info['file_hash'],
-                    file_type='video',
-                    file_format=file_info['file_format'],
-                    file_size=file_info['file_size'],
-                    mime_type=file_info['mime_type'],
-                    uploader_id=current_user.id,
-                    group_id=current_user.groups[0].id if current_user.groups else None,
-                    processing_status='pending'
-                )
-                
-                db.session.add(file_record)
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '文件上传成功',
-                    'file_id': file_record.id,
-                    'filename': file_info['filename'],
-                    'file_type': 'video',
-                    'has_watermark': False
-                })
-            
-        except Exception as e:
-            # 确保临时文件被清理
+
+        final_file_path = move_file_to_final_location(
+            temp_file_path, 'video', file_info['unique_filename']
+        )
+
+        if not final_file_path:
             try:
-                if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                if os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
             except Exception:
                 pass
-            return jsonify({'error': f'上传失败: {str(e)}'}), 500
+            return jsonify({'error': '文件移动失败'}), 500
+
+        try:
+            file_record = File(
+                filename=file_info['filename'],
+                original_path=final_file_path,
+                file_hash=file_info['file_hash'],
+                file_type='video',
+                file_format=file_info['file_format'],
+                file_size=file_info['file_size'],
+                mime_type=file_info['mime_type'],
+                uploader_id=current_user.id,
+                group_id=current_user.groups[0].id if current_user.groups else None,
+                processing_status='pending',
+                has_watermark=False
+            )
+
+            db.session.add(file_record)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            try:
+                if os.path.exists(final_file_path):
+                    os.remove(final_file_path)
+            except Exception:
+                pass
+            return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': '文件上传成功',
+            'file_id': file_record.id,
+            'filename': file_info['filename'],
+            'file_type': 'video',
+            'has_watermark': False
+        })
     
     # 获取用户的视频文件列表（分页，分未加水印/已加水印）
     page = request.args.get('page', 1, type=int)
@@ -1842,6 +1571,7 @@ def video_add_watermark():
         
         success_count = 0
         error_count = 0
+        error_details = []
         
         for file in files:
             try:
@@ -1856,32 +1586,61 @@ def video_add_watermark():
                 )
                 
                 if result and not error:
-                    file.watermarked_path = result
-                    file.file_watermark_hash = calculate_file_hash(file.watermarked_path)
-                    file.has_watermark = True
-                    file.watermark_type = algorithm
-                    file.original_watermark_text = form.watermark.data
-                    file.watermark_text = watermark_hash
+                    # 创建新的文件记录表示已添加水印的版本
+                    watermarked_file = File(
+                        filename=file.filename,
+                        original_path=file.original_path,  # 保持相同的原始路径引用
+                        watermarked_path=result,
+                        file_hash=file.file_hash,  # 复制原文件的hash
+                        file_watermark_hash=calculate_file_hash(result),
+                        file_type=file.file_type,
+                        file_format=file.file_format,
+                        file_size=file.file_size,
+                        mime_type=file.mime_type,  # 复制mime_type
+                        uploader_id=current_user.id,
+                        has_watermark=True,
+                        watermark_type=algorithm,
+                        original_watermark_text=form.watermark.data,
+                        watermark_text=watermark_hash,
+                        processing_status='completed',
+                        error_message=None,
+                        watermark_seed=random_seed
+                    )
+                    db.session.add(watermarked_file)
+                    
+                    # 原文件保持 has_watermark=False，只更新处理状态
                     file.processing_status = 'completed'
                     file.error_message = None
-                    file.watermark_seed = random_seed
                     success_count += 1
                 else:
+                    error_message = error or '水印处理失败'
                     file.processing_status = 'failed'
-                    file.error_message = error or '水印处理失败'
+                    file.error_message = error_message
                     error_count += 1
+                    error_details.append({
+                        'filename': file.filename,
+                        'error': error_message
+                    })
                     
             except Exception as e:
+                error_message = str(e)
                 file.processing_status = 'failed'
-                file.error_message = str(e)
+                file.error_message = error_message
                 error_count += 1
+                error_details.append({
+                    'filename': file.filename,
+                    'error': error_message
+                })
         
         db.session.commit()
         
-        if success_count > 0:
-            flash(f"成功处理 {success_count} 个文件")
-        if error_count > 0:
-            flash(f"处理失败 {error_count} 个文件")
+        # 将结果存储到 session 中
+        session['embed_result'] = {
+            'success_count': success_count,
+            'error_count': error_count,
+            'error_details': error_details,
+            'total_count': len(files)
+        }
         
         return redirect(url_for('video_add_watermark'))
     
@@ -1900,10 +1659,14 @@ def video_add_watermark():
         current_user, 'video', has_watermark=True, page=watermarked_page, per_page=per_page
     )
     
+    # 获取嵌入结果并清除
+    embed_result = session.pop('embed_result', None)
+    
     return render_template('video/add_watermark.html', 
                          form=form, 
                          unwatermarked_pagination=unwatermarked_pagination,
-                         watermarked_pagination=watermarked_pagination)
+                         watermarked_pagination=watermarked_pagination,
+                         embed_result=embed_result)
 
 @app.route('/video/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -1947,7 +1710,7 @@ def video_extract_watermark():
             return jsonify({'error': '没有选择文件'})
         
         # 使用通用文件上传处理函数
-        file_path, error = handle_file_upload(file, 'video')
+        file_path, error, _ = handle_file_upload(file, 'video')
         if error:
             return jsonify({'error': error})
         
@@ -1962,16 +1725,23 @@ def video_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表（分页）
+    # 获取未添加水印的文件列表（待处理的文件）
     page = request.args.get('page', 1, type=int)
     per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'video', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件列表（分页）
     watermarked_pagination = get_user_files_pagination(
         current_user, 'video', has_watermark=True, page=page, per_page=per_page
     )
+    
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('video/extract_watermark.html',
+                         unwatermarked_pagination=unwatermarked_pagination,
                          watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
@@ -2001,6 +1771,67 @@ def video_extract_from_file(file_id):
         'extracted_text': extracted_text
     })
 
+@app.route('/video/extract_from_unwatermarked_file/<int:file_id>')
+@login_required
+def video_extract_from_unwatermarked_file(file_id):
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
+    
+    # 尝试所有算法从原始文件提取水印
+    extracted_text, algorithm, error, attempt_results = process_watermark_try_all_algorithms(
+        file_record.original_path
+    )
+    
+    if error:
+        return jsonify({
+            'error': f'水印提取失败: {error}',
+            'attempt_results': attempt_results
+        })
+    
+    # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
+    try:
+        # 获取用户的 embed 目录
+        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'video')
+        
+        # 生成唯一的文件名（保持原始扩展名）
+        file_ext = os.path.splitext(file_record.filename)[1]
+        unique_filename = f"{file_record.file_hash}_embed{file_ext}"
+        embed_file_path = os.path.join(user_embed_dir, unique_filename)
+        
+        # 复制文件到 embed 目录
+        shutil.copy2(file_record.original_path, embed_file_path)
+        
+        watermarked_file = File(
+            filename=file_record.filename,
+            original_path=file_record.original_path,
+            watermarked_path=embed_file_path,  # 使用 embed 目录下的路径
+            file_hash=file_record.file_hash,
+            file_watermark_hash=file_record.file_hash,
+            file_type=file_record.file_type,
+            file_format=file_record.file_format,
+            file_size=file_record.file_size,
+            mime_type=file_record.mime_type,
+            uploader_id=current_user.id,
+            has_watermark=True,
+            watermark_type=algorithm or 'Unknown',
+            watermark_text=extracted_text,
+            processing_status='completed'
+        )
+        db.session.add(watermarked_file)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating watermarked file record: {e}")
+    
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text,
+        'algorithm': algorithm,
+        'attempt_results': attempt_results
+    })
+
 # 文档处理相关路由
 @app.route('/text/process')
 @login_required
@@ -2019,203 +1850,53 @@ def text_upload():
         temp_file_path, error, file_info = handle_file_upload(f, 'text', save_to_temp=True)
         if error:
             return jsonify({'error': error}), 400
-        
-        try:
-            # 检查文件哈希重复情况（此时文件还在临时目录）
-            result, existing_file, error_message = check_file_hash_duplicate(
-                temp_file_path, file_info['file_hash'], current_user.id, 'text'
-            )
-            
-            if result == 'duplicate_unwatermarked':
-                # 重复的未添加水印文件，删除临时文件，更新已有记录的更新时间
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                # 更新已有记录的更新时间
-                existing_file.updated_at = get_now_utc()
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '已存在未添加水印文件',
-                    'file_id': existing_file.id,
-                    'filename': existing_file.filename,
-                    'file_type': 'text',
-                    'has_watermark': False
-                })
-            
-            elif result == 'duplicate_watermarked':
-                # 重复的已添加水印文件，删除临时文件，更新已有记录的更新时间
-                try:
-                    if os.path.exists(temp_file_path):
-                        os.remove(temp_file_path)
-                except Exception:
-                    pass
-                # 更新已有记录的更新时间
-                existing_file.updated_at = get_now_utc()
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '已存在已添加水印文件',
-                    'file_id': existing_file.id,
-                    'filename': existing_file.filename,
-                    'file_type': 'text',
-                    'has_watermark': True
-                })
-            
-            elif result == 'matched_unwatermarked_other_user':
-                # 匹配到其他用户的未加水印文件，移动到upload目录，创建新记录
-                try:
-                    final_file_path = move_file_to_final_location(
-                        temp_file_path, 'text', file_info['unique_filename']
-                    )
-                    
-                    if not final_file_path:
-                        try:
-                            if os.path.exists(temp_file_path):
-                                os.remove(temp_file_path)
-                        except Exception:
-                            pass
-                        return jsonify({'error': '文件移动失败'}), 500
-                    
-                    file_record = File(
-                        filename=file_info['filename'],
-                        original_path=final_file_path,
-                        file_hash=file_info['file_hash'],
-                        file_type='text',
-                        file_format=file_info['file_format'],
-                        file_size=file_info['file_size'],
-                        mime_type=file_info['mime_type'],
-                        uploader_id=current_user.id,
-                        group_id=current_user.groups[0].id if current_user.groups else None,
-                        processing_status='pending',
-                        has_watermark=False
-                    )
-                    db.session.add(file_record)
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': '文件上传成功（匹配到其他用户的未加水印文件）',
-                        'file_id': file_record.id,
-                        'file_type': 'text',
-                        'has_watermark': False,
-                        'filename': file_info['filename']
-                    })
-                except Exception as e:
-                    db.session.rollback()
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
-            
-            elif result == 'matched_watermarked_other_user':
-                # 匹配到其他用户的已加水印文件，移动到embed目录，创建新记录
-                try:
-                    embed_file_path = move_file_to_embed_location(
-                        temp_file_path, 'text', file_info['unique_filename']
-                    )
-                    
-                    if not embed_file_path:
-                        try:
-                            if os.path.exists(temp_file_path):
-                                os.remove(temp_file_path)
-                        except Exception:
-                            pass
-                        return jsonify({'error': '文件移动到embed目录失败'}), 500
-                    
-                    file_record = File(
-                        filename=file_info['filename'],
-                        original_path=embed_file_path,
-                        file_hash=file_info['file_hash'],
-                        file_watermark_hash=existing_file.file_watermark_hash if existing_file.file_watermark_hash else file_info['file_hash'],
-                        file_type='text',
-                        file_format=file_info['file_format'],
-                        file_size=file_info['file_size'],
-                        mime_type=file_info['mime_type'],
-                        uploader_id=current_user.id,
-                        group_id=current_user.groups[0].id if current_user.groups else None,
-                        processing_status='completed',
-                        has_watermark=True,
-                        watermark_type=existing_file.watermark_type,
-                        watermark_text=existing_file.watermark_text,
-                        original_watermark_text=existing_file.original_watermark_text,
-                        watermark_seed=existing_file.watermark_seed,
-                        watermarked_path=embed_file_path
-                    )
-                    db.session.add(file_record)
-                    db.session.commit()
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': '文件上传成功（匹配到其他用户的已加水印文件）',
-                        'file_id': file_record.id,
-                        'file_type': 'text',
-                        'has_watermark': True,
-                        'filename': file_info['filename']
-                    })
-                except Exception as e:
-                    db.session.rollback()
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
-            
-            else:
-                # 新文件，移动到最终目录并创建记录
-                final_file_path = move_file_to_final_location(
-                    temp_file_path, 'text', file_info['unique_filename']
-                )
-                
-                if not final_file_path:
-                    # 移动失败，删除临时文件
-                    try:
-                        if os.path.exists(temp_file_path):
-                            os.remove(temp_file_path)
-                    except Exception:
-                        pass
-                    return jsonify({'error': '文件移动失败'}), 500
-                
-                file_record = File(
-                    filename=file_info['filename'],
-                    original_path=final_file_path,
-                    file_hash=file_info['file_hash'],
-                    file_type='text',
-                    file_format=file_info['file_format'],
-                    file_size=file_info['file_size'],
-                    mime_type=file_info['mime_type'],
-                    uploader_id=current_user.id,
-                    group_id=current_user.groups[0].id if current_user.groups else None,
-                    processing_status='pending'
-                )
-                
-                db.session.add(file_record)
-                db.session.commit()
-                
-                return jsonify({
-                    'success': True,
-                    'message': '文件上传成功',
-                    'file_id': file_record.id,
-                    'filename': file_info['filename'],
-                    'file_type': 'text',
-                    'has_watermark': False
-                })
-            
-        except Exception as e:
-            # 确保临时文件被清理
+
+        final_file_path = move_file_to_final_location(
+            temp_file_path, 'text', file_info['unique_filename']
+        )
+
+        if not final_file_path:
             try:
-                if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                if os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
             except Exception:
                 pass
-            return jsonify({'error': f'上传失败: {str(e)}'}), 500
+            return jsonify({'error': '文件移动失败'}), 500
+
+        try:
+            file_record = File(
+                filename=file_info['filename'],
+                original_path=final_file_path,
+                file_hash=file_info['file_hash'],
+                file_type='text',
+                file_format=file_info['file_format'],
+                file_size=file_info['file_size'],
+                mime_type=file_info['mime_type'],
+                uploader_id=current_user.id,
+                group_id=current_user.groups[0].id if current_user.groups else None,
+                processing_status='pending',
+                has_watermark=False
+            )
+
+            db.session.add(file_record)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            try:
+                if os.path.exists(final_file_path):
+                    os.remove(final_file_path)
+            except Exception:
+                pass
+            return jsonify({'error': f'保存文件记录失败: {str(e)}'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': '文件上传成功',
+            'file_id': file_record.id,
+            'filename': file_info['filename'],
+            'file_type': 'text',
+            'has_watermark': False
+        })
     
     # 获取用户的文本文件列表（分页，分未加水印/已加水印）
     page = request.args.get('page', 1, type=int)
@@ -2265,6 +1946,7 @@ def text_add_watermark():
         
         success_count = 0
         error_count = 0
+        error_details = []
         
         for file in files:
             try:
@@ -2277,30 +1959,59 @@ def text_add_watermark():
                 )
                 
                 if result and not error:
-                    file.watermarked_path = result
-                    file.file_watermark_hash = calculate_file_hash(file.watermarked_path)
-                    file.has_watermark = True
-                    file.watermark_type = algorithm
-                    file.watermark_text = form.watermark.data
+                    # 创建新的文件记录表示已添加水印的版本
+                    watermarked_file = File(
+                        filename=file.filename,
+                        original_path=file.original_path,  # 保持相同的原始路径引用
+                        watermarked_path=result,
+                        file_hash=file.file_hash,  # 复制原文件的hash
+                        file_watermark_hash=calculate_file_hash(result),
+                        file_type=file.file_type,
+                        file_format=file.file_format,
+                        file_size=file.file_size,
+                        mime_type=file.mime_type,  # 复制mime_type
+                        uploader_id=current_user.id,
+                        has_watermark=True,
+                        watermark_type=algorithm,
+                        watermark_text=form.watermark.data,
+                        processing_status='completed',
+                        error_message=None
+                    )
+                    db.session.add(watermarked_file)
+                    
+                    # 原文件保持 has_watermark=False，只更新处理状态
                     file.processing_status = 'completed'
                     file.error_message = None
                     success_count += 1
                 else:
+                    error_message = error or '水印处理失败'
                     file.processing_status = 'failed'
-                    file.error_message = error or '水印处理失败'
+                    file.error_message = error_message
                     error_count += 1
+                    error_details.append({
+                        'filename': file.filename,
+                        'error': error_message
+                    })
                     
             except Exception as e:
+                error_message = str(e)
                 file.processing_status = 'failed'
-                file.error_message = str(e)
+                file.error_message = error_message
                 error_count += 1
+                error_details.append({
+                    'filename': file.filename,
+                    'error': error_message
+                })
         
         db.session.commit()
         
-        if success_count > 0:
-            flash(f"成功处理 {success_count} 个文件")
-        if error_count > 0:
-            flash(f"处理失败 {error_count} 个文件")
+        # 将结果存储到 session 中
+        session['embed_result'] = {
+            'success_count': success_count,
+            'error_count': error_count,
+            'error_details': error_details,
+            'total_count': len(files)
+        }
         
         return redirect(url_for('text_add_watermark'))
     
@@ -2319,10 +2030,14 @@ def text_add_watermark():
         current_user, 'text', has_watermark=True, page=watermarked_page, per_page=per_page
     )
     
+    # 获取嵌入结果并清除
+    embed_result = session.pop('embed_result', None)
+    
     return render_template('text/add_watermark.html', 
                          form=form, 
                          unwatermarked_pagination=unwatermarked_pagination,
-                         watermarked_pagination=watermarked_pagination)
+                         watermarked_pagination=watermarked_pagination,
+                         embed_result=embed_result)
 
 @app.route('/text/extract_watermark', methods=['GET', 'POST'])
 @login_required
@@ -2365,7 +2080,7 @@ def text_extract_watermark():
             return jsonify({'error': '没有选择文件'})
         
         # 使用通用文件上传处理函数
-        file_path, error = handle_file_upload(file, 'text')
+        file_path, error, _ = handle_file_upload(file, 'text')
         if error:
             return jsonify({'error': error})
         
@@ -2380,16 +2095,23 @@ def text_extract_watermark():
             'extracted_text': extracted_text
         })
     
-    # 获取已添加水印的文件列表（分页）
+    # 获取未添加水印的文件列表（待处理的文件）
     page = request.args.get('page', 1, type=int)
     per_page = 5
+    unwatermarked_pagination = get_user_files_pagination(
+        current_user, 'text', has_watermark=False, page=page, per_page=per_page
+    )
+    
+    # 获取已添加水印的文件列表（分页）
     watermarked_pagination = get_user_files_pagination(
         current_user, 'text', has_watermark=True, page=page, per_page=per_page
     )
+    
     # 获取之前的提取结果
     extracted_watermarks = session.pop('extracted_watermarks', {})
     
     return render_template('text/extract_watermark.html',
+                         unwatermarked_pagination=unwatermarked_pagination,
                          watermarked_pagination=watermarked_pagination,
                          extracted_watermarks=extracted_watermarks)
 
@@ -2415,6 +2137,67 @@ def text_extract_from_file(file_id):
     return jsonify({
         'success': True,
         'extracted_text': extracted_text
+    })
+
+@app.route('/text/extract_from_unwatermarked_file/<int:file_id>')
+@login_required
+def text_extract_from_unwatermarked_file(file_id):
+    # 获取文件记录
+    file_record = File.query.get_or_404(file_id)
+    if file_record.uploader_id != current_user.id:
+        return jsonify({'error': '您没有权限处理该文件'})
+    
+    # 尝试所有算法从原始文件提取水印
+    extracted_text, algorithm, error, attempt_results = process_watermark_try_all_algorithms(
+        file_record.original_path
+    )
+    
+    if error:
+        return jsonify({
+            'error': f'水印提取失败: {error}',
+            'attempt_results': attempt_results
+        })
+    
+    # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
+    try:
+        # 获取用户的 embed 目录
+        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'text')
+        
+        # 生成唯一的文件名（保持原始扩展名）
+        file_ext = os.path.splitext(file_record.filename)[1]
+        unique_filename = f"{file_record.file_hash}_embed{file_ext}"
+        embed_file_path = os.path.join(user_embed_dir, unique_filename)
+        
+        # 复制文件到 embed 目录
+        shutil.copy2(file_record.original_path, embed_file_path)
+        
+        watermarked_file = File(
+            filename=file_record.filename,
+            original_path=file_record.original_path,
+            watermarked_path=embed_file_path,  # 使用 embed 目录下的路径
+            file_hash=file_record.file_hash,
+            file_watermark_hash=file_record.file_hash,
+            file_type=file_record.file_type,
+            file_format=file_record.file_format,
+            file_size=file_record.file_size,
+            mime_type=file_record.mime_type,
+            uploader_id=current_user.id,
+            has_watermark=True,
+            watermark_type=algorithm or 'Unknown',
+            watermark_text=extracted_text,
+            processing_status='completed'
+        )
+        db.session.add(watermarked_file)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating watermarked file record: {e}")
+    
+    return jsonify({
+        'success': True,
+        'extracted_text': extracted_text,
+        'algorithm': algorithm,
+        'attempt_results': attempt_results
     })
 
 @app.route('/batch_delete', methods=['POST'])
@@ -2610,3 +2393,348 @@ def search():
         files_pagination=files_pagination,
         format_file_size=format_file_size
     )
+
+
+# ============================================================================
+# 问题反馈路由
+# ============================================================================
+
+@app.route('/feedback', methods=['GET'])
+def feedback():
+    """显示问题反馈页面"""
+    return render_template('feedback.html')
+
+
+@app.route('/submit_feedback', methods=['POST'])
+def submit_feedback():
+    """处理问题反馈提交（暂不保存到数据库）"""
+    # 获取表单数据
+    name = request.form.get('name', '')
+    contact = request.form.get('contact', '')
+    issue_type = request.form.get('issue_type', '')
+    title = request.form.get('title', '')
+    description = request.form.get('description', '')
+    
+    # 记录到日志（可选）
+    current_app.logger.info(
+        f'收到反馈 - 姓名: {name}, 联系方式: {contact}, '
+        f'类型: {issue_type}, 标题: {title}'
+    )
+    
+    # 显示成功消息
+    flash('感谢您的反馈！我们已收到您的问题，会尽快处理。', 'success')
+    
+    # 重定向回首页
+    return redirect(url_for('index'))
+
+# ============================================================================
+# 清理文件：前端可配置清理天数
+# ============================================================================
+
+from typing import List
+import threading
+import time
+import json
+from typing import List
+
+# 简单的分页对象类，用于模拟 Flask-SQLAlchemy 的 Pagination
+class SimplePagination:
+    def __init__(self, items, page, per_page, total):
+        self.items = items
+        self.page = page
+        self.per_page = per_page
+        self.total = total
+        self.pages = (total + per_page - 1) // per_page if per_page > 0 else 0
+        self.has_prev = page > 1
+        self.has_next = page < self.pages
+        self.prev_num = page - 1 if self.has_prev else None
+        self.next_num = page + 1 if self.has_next else None
+    
+    def iter_pages(self, left_edge=2, left_current=2, right_current=3, right_edge=2):
+        """生成页码列表，None 表示省略号"""
+        last = 0
+        for num in range(1, self.pages + 1):
+            if (num <= left_edge or 
+                (self.page - left_current - 1 < num < self.page + right_current) or 
+                num > self.pages - right_edge):
+                if last + 1 != num:
+                    yield None
+                yield num
+                last = num
+
+# ============================================================================
+# 后台线程：按用户定期清理文件
+# ============================================================================
+
+_cleanup_thread_started = False
+
+def _write_cleanup_log(username: str, deleted_files: list, days: int):
+    """将清理记录写入JSON文件
+    
+    Args:
+        username: 用户名
+        deleted_files: 被删除的文件信息列表
+        days: 保留天数（该用户设置的文件保留天数）
+    """
+    try:
+        logs_dir = app.config.get('LOGS_FOLDER', 'instance/logs')
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        # 按日期创建JSON日志文件
+        log_date = get_now_utc().strftime('%Y-%m-%d')
+        log_file = os.path.join(logs_dir, f'cleanup_{log_date}.json')
+        
+        # 准备日志条目
+        log_entry = {
+            'timestamp': get_now_utc().strftime('%Y-%m-%d %H:%M:%S'),
+            'username': username,
+            'retention_days': days,
+            'deleted_count': len(deleted_files),
+            'files': deleted_files
+        }
+        
+        # 读取现有日志
+        existing_logs = []
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    existing_logs = json.load(f)
+            except (json.JSONDecodeError, Exception):
+                existing_logs = []
+        
+        # 追加新日志
+        existing_logs.append(log_entry)
+        
+        # 写回文件
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(existing_logs, f, ensure_ascii=False, indent=2)
+            
+        current_app.logger.info('清理日志已写入: %s', log_file)
+    except Exception as e:
+        current_app.logger.error('写入清理日志失败: %s', e)
+
+def _user_cleanup_worker(interval_seconds: int = 1800, default_days: int = 7):
+    """后台循环：定期扫描所有用户，根据 retention_days 删除其过期文件。
+
+    interval_seconds: 扫描间隔秒数
+    default_days: 用户未设置 retention_days 时使用的默认保留天数
+    """
+    while True:
+        try:
+            with app.app_context():
+                users = User.query.all()
+                for user in users:
+                    days = user.retention_days if user.retention_days and user.retention_days > 0 else default_days
+                    cutoff = get_now_utc() - timedelta(days=days)
+                    # 查询该用户的文件，超过天数的判定依据 created_at
+                    old_files = File.query.filter(File.uploader_id == user.id, File.created_at < cutoff).all()
+                    
+                    if not old_files:
+                        continue
+                    
+                    deleted_files = []
+                    removed_count = 0
+                    
+                    for f in old_files:
+                        # 记录文件信息
+                        file_info = {
+                            'filename': f.filename,
+                            'file_type': f.file_type,
+                            'file_size': f.file_size,
+                            'created_at': f.created_at.strftime('%Y-%m-%d %H:%M:%S') if f.created_at else 'N/A',
+                            'has_watermark': f.has_watermark,
+                            'original_path': f.original_path,
+                            'watermarked_path': f.watermarked_path
+                        }
+                        
+                        # 删除物理文件
+                        for path in [f.original_path, f.watermarked_path]:
+                            if path and os.path.exists(path):
+                                try:
+                                    os.remove(path)
+                                except Exception:
+                                    pass
+                        
+                        try:
+                            db.session.delete(f)
+                            removed_count += 1
+                            deleted_files.append(file_info)
+                        except Exception:
+                            db.session.rollback()
+                    
+                    if removed_count:
+                        try:
+                            db.session.commit()
+                            current_app.logger.info('后台清理: user=%s days=%s removed=%s', user.username, days, removed_count)
+                            # 写入日志文件
+                            _write_cleanup_log(user.username, deleted_files, days)
+                        except Exception as e:
+                            db.session.rollback()
+                            current_app.logger.error('后台清理提交失败: %s', e)
+        except Exception as e:
+            try:
+                current_app.logger.exception('后台清理线程错误: %s', e)
+            except Exception:
+                pass
+        time.sleep(interval_seconds)
+
+def ensure_cleanup_thread():
+    global _cleanup_thread_started
+    if not _cleanup_thread_started:
+        t = threading.Thread(target=_user_cleanup_worker, args=(1800, 7), daemon=True)
+        t.start()
+        _cleanup_thread_started = True
+        current_app.logger.info('用户文件后台清理线程已启动')
+
+# 在应用启动后尝试启动一次（被导入时可能无应用上下文，使用 after_request 保底）
+@app.before_request
+def _start_background_cleanup_if_needed():
+    try:
+        ensure_cleanup_thread()
+    except Exception:
+        pass
+
+# ============================================================================
+# 用户设置保留天数 UI + API
+# ============================================================================
+
+@app.route('/profile/retention', methods=['GET', 'POST'])
+@login_required
+def profile_retention():
+    if request.method == 'POST':
+        days = request.form.get('days', type=int)
+        if not days or days < 1 or days > 365:
+            flash('保留天数必须在 1-365 之间', 'warning')
+            return redirect(url_for('profile_retention'))
+        try:
+            current_user.retention_days = days
+            db.session.commit()
+            flash(f'已更新保留天数为 {days} 天', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'更新失败: {e}', 'danger')
+        return redirect(url_for('profile_retention'))
+    
+    # 获取分页参数
+    page = request.args.get('page', 1, type=int)
+    per_page = 2  # 每页显示2条清理记录（便于测试分页）
+    
+    # 读取当前用户的所有清理日志
+    all_logs = _get_all_user_cleanup_logs(current_user.username)
+    
+    # 手动实现分页
+    total = len(all_logs)
+    start = (page - 1) * per_page
+    end = start + per_page
+    cleanup_logs = all_logs[start:end]
+    
+    # 创建分页对象
+    pagination = SimplePagination(
+        items=cleanup_logs,
+        page=page,
+        per_page=per_page,
+        total=total
+    )
+    
+    return render_template('profile/retention.html', 
+                         current_days=current_user.retention_days or 7,
+                         pagination=pagination)
+
+def _get_all_user_cleanup_logs(username: str):
+    """获取用户的所有清理日志
+    
+    Args:
+        username: 用户名
+    
+    Returns:
+        list: 清理日志列表，按时间倒序
+    """
+    try:
+        logs_dir = app.config.get('LOGS_FOLDER', 'instance/logs')
+        if not os.path.exists(logs_dir):
+            return []
+        
+        # 获取所有JSON日志文件，按日期倒序
+        log_files = sorted(
+            [f for f in os.listdir(logs_dir) if f.startswith('cleanup_') and f.endswith('.json')],
+            reverse=True
+        )
+        
+        user_logs = []
+        for log_file in log_files:
+            log_path = os.path.join(logs_dir, log_file)
+            try:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    daily_logs = json.load(f)
+                    # 筛选当前用户的日志，按时间倒序
+                    for log_entry in reversed(daily_logs):
+                        if log_entry.get('username') == username:
+                            user_logs.append(log_entry)
+            except Exception as e:
+                current_app.logger.error('读取日志文件失败 %s: %s', log_file, e)
+                continue
+        
+        return user_logs
+    except Exception as e:
+        current_app.logger.error('获取清理日志失败: %s', e)
+        return []
+
+def _get_user_cleanup_logs(username: str, limit: int = 10):
+    """获取用户的清理日志
+    
+    Args:
+        username: 用户名
+        limit: 返回最近N条记录
+    
+    Returns:
+        list: 清理日志列表，按时间倒序
+    """
+    try:
+        logs_dir = app.config.get('LOGS_FOLDER', 'instance/logs')
+        if not os.path.exists(logs_dir):
+            return []
+        
+        # 获取所有JSON日志文件，按日期倒序
+        log_files = sorted(
+            [f for f in os.listdir(logs_dir) if f.startswith('cleanup_') and f.endswith('.json')],
+            reverse=True
+        )
+        
+        user_logs = []
+        for log_file in log_files:
+            if len(user_logs) >= limit:
+                break
+                
+            log_path = os.path.join(logs_dir, log_file)
+            try:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    daily_logs = json.load(f)
+                    # 筛选当前用户的日志，按时间倒序
+                    for log_entry in reversed(daily_logs):
+                        if len(user_logs) >= limit:
+                            break
+                        if log_entry.get('username') == username:
+                            user_logs.append(log_entry)
+            except Exception as e:
+                current_app.logger.error('读取日志文件失败 %s: %s', log_file, e)
+                continue
+        
+        return user_logs
+    except Exception as e:
+        current_app.logger.error('获取清理日志失败: %s', e)
+        return []
+
+@app.route('/api/profile/retention', methods=['POST'])
+@login_required
+def api_profile_retention():
+    payload = request.get_json(silent=True) or request.form
+    try:
+        days = int(payload.get('days', 0))
+        if days < 1 or days > 365:
+            return jsonify({'success': False, 'message': 'days 需在 1-365 之间'}), 400
+        current_user.retention_days = days
+        db.session.commit()
+        return jsonify({'success': True, 'days': days})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500

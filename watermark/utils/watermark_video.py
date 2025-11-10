@@ -411,4 +411,46 @@ def extract_avi_dct(input_file):
 
 
 
+# MOV格式的DCT实现
+def embed_mov_dct(input_file, watermark):
+    """DCT算法实现 - MOV格式专用"""
+    print("video_watermark_embed for MOV!")
+    class Args:
+        input = input_file
+        output = get_user_dated_embed_dir('video')
 
+    args = Args()
+    os.makedirs(args.output, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    video_model = videoseal.load("videoseal")
+    video_model.eval()
+    video_model.to(device)
+    video_model.compile()
+    # current_dir = os.getcwd()
+    # 文件保存逻辑
+    original_name = os.path.basename(args.input)
+    name_without_ext = os.path.splitext(original_name)[0]
+    # filename = f"{name_without_ext}_embed.{'png'}"
+    filename = f"{name_without_ext}_embed.{'mov'}"
+    full_path = os.path.join(args.output, filename)
+    # output = os.path.join(current_dir, args.output)
+    msgs_ori = embed_video(video_model, args.input, args.output, 16, watermark, full_path)
+
+        
+    return full_path  # 返回完整路径
+
+
+def extract_mov_dct(input_file):
+    """DCT算法提取 - mov格式专用"""
+    print("video_watermark_extract for MOV!")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    video_model = videoseal.load("videoseal")
+    video_model.eval()
+    video_model.to(device)
+    video_model.compile()
+
+    soft_msgs = detect_video(video_model, input_file, 16)
+    extracted_string = bit_tensor_to_string(soft_msgs, max_chars=32)
+    print(f"Extracted watermark (as string): {extracted_string}")
+    return extracted_string

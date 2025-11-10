@@ -24,6 +24,59 @@
         color: #2c3e50;
         margin-bottom: 10px;
     }
+    .inline-upload-section {
+        margin-bottom: 30px;
+    }
+    .inline-upload-alert {
+        margin-bottom: 15px;
+        text-align: left;
+    }
+    .inline-upload-box {
+        border: 2px dashed #ddd;
+        border-radius: 5px;
+        padding: 30px;
+        text-align: center;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+        background-color: #fafafa;
+        cursor: pointer;
+        min-height: 160px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .inline-upload-box:hover,
+    .inline-upload-box.dragover {
+        border-color: #3498db;
+        background-color: #f1f8ff;
+    }
+    .inline-upload-box.disabled {
+        opacity: 0.65;
+        pointer-events: none;
+    }
+    .inline-upload-icon {
+        font-size: 48px;
+        color: #95a5a6;
+        margin-bottom: 10px;
+        display: block;
+    }
+    .inline-upload-text {
+        margin-bottom: 5px;
+    }
+    .button-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin: 15px auto 0;
+    }
+    .button-container .btn {
+        min-width: 120px;
+        width: 120px;
+        margin: 0;
+    }
+
     .result-list {
         margin-top: 30px;
     }
@@ -218,13 +271,32 @@
         max-width: 90%;
         box-shadow: 0 10px 30px rgba(0,0,0,.2);
         padding: 16px 16px 12px;
+    }
+    .center-modal.error-modal {
         border: 1px solid #f5c6cb;
     }
-    .center-modal .modal-head {
+    .center-modal.error-modal .modal-head {
         display: flex; justify-content: space-between; align-items: center;
         color: #a94442;
     }
-    .center-modal .modal-body { margin-top: 8px; color: #a94442; }
+    .center-modal.error-modal .modal-body { margin-top: 8px; color: #a94442; }
+    
+    .center-modal.success-modal {
+        border: 1px solid #d6e9c6;
+    }
+    .center-modal.success-modal .modal-head {
+        display: flex; justify-content: space-between; align-items: center;
+        color: #3c763d;
+    }
+    .center-modal.success-modal .modal-body { margin-top: 8px; color: #3c763d; }
+    .center-modal.success-modal .modal-footer { 
+        margin-top: 12px; 
+        padding-top: 12px; 
+        border-top: 1px solid #d6e9c6;
+        font-size: 12px;
+        color: #666;
+        text-align: center;
+    }
     .center-modal .modal-actions { text-align: right; margin-top: 12px; }
 </style>
 {% endblock %}
@@ -236,9 +308,11 @@
             <a href="{{ url_for('audio_add_watermark') }}" class="btn btn-primary" style="margin-right: 10px; margin-left: -15px;">
                 <i class="glyphicon glyphicon-tint"></i> 去添加水印
             </a>
+            <!-- 去上传文件按钮（已停用，仅注释保留）
             <a href="{{ url_for('audio_upload') }}" class="btn btn-success" style="margin-right: 10px;">
                 <i class="glyphicon glyphicon-cloud-upload"></i> 去上传文件
             </a>
+            -->
             <a href="{{ url_for('audio_process') }}" class="btn btn-default" style="margin-left: auto;">
                 <i class="glyphicon glyphicon-arrow-left"></i> 返回
             </a>
@@ -249,21 +323,44 @@
         <p class="text-muted">从您的音频文件中提取水印信息</p>
     </div>
 
-    <!-- 批量操作 -->
-    {% if watermarked_pagination.items %}
+    <div class="inline-upload-section">
+        <div class="alert alert-info inline-upload-alert">
+            <strong>注意</strong>
+            <ul style="margin: 10px 0 0 18px;">
+                <li>支持的音频格式：MP3、WAV、FLAC、AAC、M4A、OGG</li>
+                <li>支持批量选择多个文件</li>
+                <li>单个文件大小请勿超过 {{ get_max_size_formatted('audio') if get_max_size_formatted is defined else '50MB' }}</li>
+            </ul>
+        </div>
+        <div class="inline-upload-box" id="audioExtractInlineDrop">
+            <i class="glyphicon glyphicon-music inline-upload-icon"></i>
+            <p class="lead inline-upload-text">临时上传音频并立即提取水印</p>
+            <p class="text-muted" style="margin-bottom: 0;">支持 MP3 / WAV / FLAC / AAC / M4A / OGG（可多选）</p>
+            <form id="audioExtractInlineUploadForm" action="{{ url_for('audio_upload') }}" method="post" enctype="multipart/form-data">
+                <input type="file" id="audioExtractInlineFileInput" name="file" accept=".mp3,.wav,.flac,.aac,.m4a,.ogg" multiple style="display:none;">
+                <div class="button-container">
+                    <button type="button" class="btn btn-primary" id="audioExtractInlineSelectBtn">选择音频</button>
+                    <button type="button" class="btn btn-success" id="audioExtractInlineUploadBtn" style="display: none;">开始上传</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 显示待处理的文件列表 -->
+    <h3 class="section-title"><i class="glyphicon glyphicon-list"></i> 待处理的文件列表</h3>
+    
+    <!-- 批量操作 - 待处理的文件 -->
+    {% if unwatermarked_pagination.items %}
     <div class="batch-actions">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <label>
-                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选
+                    <input type="checkbox" id="selectAllUnwatermarked" onchange="toggleSelectAllUnwatermarked()"> 全选
                 </label>
-                <span id="selectedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
+                <span id="selectedUnwatermarkedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
             </div>
             <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
-                <button type="button" class="btn btn-primary btn-sm" onclick="extractWatermarkFromSelected()" id="extractWatermarkBtn" disabled>
-                    <i class="glyphicon glyphicon-search"></i> 提取水印！
-                </button>
-                <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedFiles()" id="deleteSelectedBtn" disabled>
+                <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedUnwatermarkedFiles()" id="deleteUnwatermarkedBtn" disabled>
                     <i class="glyphicon glyphicon-trash"></i> 批量删除
                 </button>
             </div>
@@ -271,9 +368,73 @@
     </div>
     {% endif %}
     
+    {% if unwatermarked_pagination.items %}
+    <div class="file-list">
+        {% for file in unwatermarked_pagination.items %}
+        <div class="file-item" data-file-id="{{ file.id }}">
+            <div class="file-info">
+                <label style="margin: 0; cursor: pointer;">
+                    <input type="checkbox" class="file-checkbox-unwatermarked" value="{{ file.id }}" onchange="updateSelectedUnwatermarkedCount()">
+                    <i class="glyphicon glyphicon-music"></i>
+                    <span>{{ file.filename }}</span>
+                </label>
+                <small class="text-muted">
+                    <br>
+                    上传时间：{{ to_local_time(file.created_at) }}
+                    <br>
+                    大小：{{ "%.2f MB"|format(file.file_size / 1024 / 1024) }}
+                    <br>
+                    格式：{{ file.file_format.upper() }}
+                </small>
+            </div>
+            <div class="file-actions">
+                <button type="button" class="btn btn-sm btn-info extract-button-unwatermarked" data-file-id="{{ file.id }}">
+                    <i class="glyphicon glyphicon-search"></i> 提取水印
+                </button>
+                <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline; margin-left: 5px;" onsubmit="event.preventDefault(); var form = this; showConfirm({title: '确认删除', message: '确定要删除此音频吗？删除后将无法恢复。', type: 'danger', confirmText: '删除', onConfirm: function() { form.submit(); }});">
+                    <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="glyphicon glyphicon-trash"></i> 删除
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- 分页控件 -->
+    {{ render_pagination(unwatermarked_pagination, 'audio_extract_watermark', 'page') }}
+    {% else %}
+    <div class="empty-list">
+        <p><i class="glyphicon glyphicon-info-sign"></i> 暂无待处理的文件</p>
+    </div>
+    {% endif %}
+
     <!-- 显示用户的已添加水印的文件列表 -->
     <div class="main-section">
         <h3 class="section-title"><i class="glyphicon glyphicon-ok-circle"></i> 您的已添加水印的文件</h3>
+        
+        <!-- 批量操作 -->
+        {% if watermarked_pagination.items %}
+        <div class="batch-actions">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <label>
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选
+                    </label>
+                    <span id="selectedCount" style="margin-left: 10px; color: #666;">已选择 0 个文件</span>
+                </div>
+                <div style="display: flex; gap: 5px; align-items: center; transform: translateX(-12px);">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="extractWatermarkFromSelected()" id="extractWatermarkBtn" disabled>
+                        <i class="glyphicon glyphicon-search"></i> 提取水印！
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteSelectedFiles()" id="deleteSelectedBtn" disabled>
+                        <i class="glyphicon glyphicon-trash"></i> 批量删除
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
         {% if watermarked_pagination.items %}
         <div class="file-list">
             {% for file in watermarked_pagination.items %}
@@ -304,7 +465,7 @@
                     <button type="button" class="btn btn-sm btn-info extract-button" data-file-id="{{ file.id }}">
                         <i class="glyphicon glyphicon-search"></i> 提取水印
                     </button>
-                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此文件吗？');">
+                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" style="display:inline;" onsubmit="event.preventDefault(); var form = this; showConfirm({title: '确认删除', message: '确定要删除此文件吗？删除后将无法恢复。', type: 'danger', confirmText: '删除', onConfirm: function() { form.submit(); }});">
                         <button type="submit" class="btn btn-sm btn-danger">
                             <i class="glyphicon glyphicon-trash"></i> 删除
                         </button>
@@ -381,6 +542,19 @@
 {% block scripts %}
 {{super()}}
 <script>
+        // 调用通用上传助手（完全匹配 upload 页面）
+        if (window.initInlineUploader) {
+            window.initInlineUploader({
+                dropZoneId: 'audioExtractInlineDrop',
+                fileInputId: 'audioExtractInlineFileInput',
+                selectBtnId: 'audioExtractInlineSelectBtn',
+                uploadBtnId: 'audioExtractInlineUploadBtn',
+                uploadUrl: "{{ url_for('audio_upload') }}",
+                fileFieldName: 'file',
+                reloadDelay: 2000
+            });
+        }
+
     var selectedFiles = [];
     
     // 页面加载时检查URL参数
@@ -651,7 +825,7 @@
         }
     });
 
-    // 事件委托，绑定每条记录上的"提取水印"按钮，避免内联表达式冲突
+    // 事件委托，绑定每条记录上的"提取水印"按钮（已添加水印的文件），避免内联表达式冲突
     document.addEventListener('click', function(e) {
         var target = e.target;
         if (target && target.closest && target.closest('.extract-button')) {
@@ -675,6 +849,103 @@
         }
     });
 
+    // 事件委托，绑定待处理文件的"提取水印"按钮
+    document.addEventListener('click', function(e) {
+        var target = e.target;
+        if (target && target.closest && target.closest('.extract-button-unwatermarked')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var btn = target.closest('.extract-button-unwatermarked');
+            
+            if (btn.disabled) {
+                return;
+            }
+            
+            var idAttr = btn.getAttribute('data-file-id');
+            if (idAttr) {
+                var id = parseInt(idAttr, 10);
+                if (!isNaN(id)) {
+                    extractUnwatermarked(id, btn, true);
+                }
+            }
+        }
+    });
+
+    // 提取待处理文件（未添加水印的原始文件）
+    async function extractUnwatermarked(id, el, showLoading) {
+        if (el && el.dataset.processing === 'true') {
+            console.log('正在处理中，忽略重复请求');
+            return;
+        }
+        
+        if (el) {
+            el.disabled = true;
+            el.dataset.processing = 'true';
+        }
+        
+        var start = Date.now();
+        if (showLoading !== false && window.AppLoading) AppLoading.show('正在提取水印...');
+        try {
+            const resp = await fetch(`{{ url_for('audio_extract_from_unwatermarked_file', file_id=0) }}?format=json`.replace('0', id));
+            const data = await resp.json();
+            const fileItem = document.querySelector(`.file-item[data-file-id="${id}"]`);
+            const filename = fileItem ? fileItem.querySelector('span').textContent : `ID ${id}`;
+            renderClientResult(filename, data);
+            var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            if (data && data.error) {
+                // 构建详细的错误信息
+                let errorMsg = data.error;
+                if (data.attempt_results && data.attempt_results.length > 0) {
+                    errorMsg += '<br><br><strong>算法尝试详情：</strong><br>';
+                    data.attempt_results.forEach((result, index) => {
+                        const statusIcon = result.status === 'success' ? '✓' : 
+                                           result.status === 'empty' ? '○' : '✗';
+                        const statusText = result.status === 'success' ? '成功' : 
+                                           result.status === 'empty' ? '结果为空' : '失败';
+                        errorMsg += `${index + 1}. ${statusIcon} 算法 <strong>${result.algorithm}</strong>: ${statusText}`;
+                        if (result.message) {
+                            errorMsg += ` - ${result.message}`;
+                        }
+                        errorMsg += '<br>';
+                    });
+                }
+                if (window.AppLoading) AppLoading.alertDanger('提取失败');
+                showCenterError(errorMsg || '提取失败，请重试或更换文件。');
+            } else {
+                var algorithmInfo = data.algorithm ? `使用算法: ${data.algorithm}` : '';
+                
+                // 构建简略的成功信息
+                let successMsg = `文件 <strong>${filename}</strong> 提取成功！<br>用时 ${elapsed} 秒${algorithmInfo ? '，' + algorithmInfo : ''}`;
+                
+                // 构建详细信息
+                let detailMsg = '';
+                if (data.attempt_results && data.attempt_results.length > 1) {
+                    detailMsg = '尝试了 ' + data.attempt_results.length + ' 种算法';
+                    let failedCount = data.attempt_results.filter(r => r.status !== 'success').length;
+                    if (failedCount > 0) {
+                        detailMsg += `，其中 ${failedCount} 种失败`;
+                    }
+                }
+                
+                if (window.AppLoading) AppLoading.alertSuccess('提取成功！');
+                showCenterSuccess(successMsg, detailMsg);
+                // 提取成功后刷新页面，以显示已转移到已添加水印列表的文件
+                setTimeout(() => location.reload(), 2500);
+            }
+        } catch (e) {
+            renderClientResult(`ID ${id}` , { error: String(e) });
+            if (window.AppLoading) AppLoading.alertDanger('提取失败');
+            showCenterError(String(e));
+        } finally {
+            if (el) {
+                el.disabled = false;
+                el.dataset.processing = 'false';
+            }
+            if (showLoading !== false && window.AppLoading) AppLoading.hide();
+        }
+    }
+
     // 居中错误弹窗（手动关闭）
     function showCenterError(message) {
         var old = document.getElementById('centerModalBackdrop');
@@ -683,7 +954,7 @@
         backdrop.className = 'center-modal-backdrop';
         backdrop.id = 'centerModalBackdrop';
         backdrop.innerHTML = `
-            <div class="center-modal">
+            <div class="center-modal error-modal">
                 <div class="modal-head">
                     <strong><i class="glyphicon glyphicon-exclamation-sign"></i> 提取失败</strong>
                     <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
@@ -695,6 +966,112 @@
             </div>`;
         document.body.appendChild(backdrop);
         backdrop.style.display = 'block';
+    }
+
+    // 居中成功弹窗
+    function showCenterSuccess(message, detailMessage) {
+        var old = document.getElementById('centerModalBackdrop');
+        if (old) old.remove();
+        var backdrop = document.createElement('div');
+        backdrop.className = 'center-modal-backdrop';
+        backdrop.id = 'centerModalBackdrop';
+        backdrop.innerHTML = `
+            <div class="center-modal success-modal">
+                <div class="modal-head">
+                    <strong><i class="glyphicon glyphicon-ok-sign"></i> 提取成功</strong>
+                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">${message || '成功提取水印！'}</div>
+                ${detailMessage ? `<div class="modal-footer">${detailMessage}</div>` : '<div class="modal-footer">详细信息请查看页面底部的提取结果</div>'}
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-success" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                </div>
+            </div>`;
+        document.body.appendChild(backdrop);
+        backdrop.style.display = 'block';
+    }
+
+    // ========== 待处理文件的批量操作函数 ==========
+    var selectedUnwatermarkedFiles = [];
+
+    // 全选待处理的文件
+    function toggleSelectAllUnwatermarked() {
+        var selectAll = document.getElementById('selectAllUnwatermarked');
+        var checkboxes = document.querySelectorAll('.file-checkbox-unwatermarked');
+        
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+        
+        updateSelectedUnwatermarkedCount();
+    }
+
+    // 更新待处理文件的选中数量
+    function updateSelectedUnwatermarkedCount() {
+        var checkboxes = document.querySelectorAll('.file-checkbox-unwatermarked:checked');
+        var allCheckboxes = document.querySelectorAll('.file-checkbox-unwatermarked');
+        var count = checkboxes.length;
+        var totalCount = allCheckboxes.length;
+        var selectedCount = document.getElementById('selectedUnwatermarkedCount');
+        var deleteBtn = document.getElementById('deleteUnwatermarkedBtn');
+        var selectAll = document.getElementById('selectAllUnwatermarked');
+        
+        // 更新选中数量显示
+        if (selectedCount) {
+            selectedCount.textContent = '已选择 ' + count + ' 个文件';
+        }
+        
+        // 更新全选框状态
+        if (selectAll) {
+            if (count === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else if (count === totalCount) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            }
+        }
+        
+        // 更新按钮状态
+        if (deleteBtn) deleteBtn.disabled = count === 0;
+        
+        // 更新选中文件列表
+        selectedUnwatermarkedFiles = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    }
+
+    // 批量删除待处理的文件
+    function deleteSelectedUnwatermarkedFiles() {
+        if (selectedUnwatermarkedFiles.length === 0) {
+            alert('请先选择要删除的文件');
+            return;
+        }
+        if (!confirm('确定要删除选中的 ' + selectedUnwatermarkedFiles.length + ' 个文件吗？此操作不可撤销！')) {
+            return;
+        }
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/batch_delete';
+
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'file_ids';
+        input.value = selectedUnwatermarkedFiles.join(',');
+        form.appendChild(input);
+
+        var csrfToken = document.querySelector('input[name="csrf_token"]');
+        if (csrfToken) {
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.value;
+            form.appendChild(csrfInput);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
     }
 </script>
 {% endblock %}

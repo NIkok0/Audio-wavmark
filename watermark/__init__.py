@@ -83,6 +83,9 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
 app.config['DEBUG'] = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 app.config['ENV'] = os.getenv('ENV', 'production')
 
+# 禁用 CSRF 保护
+app.config['WTF_CSRF_ENABLED'] = False
+
 # 初始化扩展
 Bootstrap(app)
 db = SQLAlchemy(app)
