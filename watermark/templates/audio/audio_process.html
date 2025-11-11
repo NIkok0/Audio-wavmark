@@ -97,6 +97,7 @@
         </a>
         -->
         <!-- 添加水印模块 -->
+        {% if can_embed %}
         <a href="{{ url_for('audio_add_watermark') }}" class="module-card">
             <div class="module-icon">
                 <i class="glyphicon glyphicon-music"></i>
@@ -109,8 +110,23 @@
                 支持多种水印添加算法
             </div>
         </a>
+        {% else %}
+        <div class="module-card" style="opacity: 0.6; cursor: not-allowed;" onclick="alert('您没有权限进行嵌入水印操作，请联系管理员'); return false;">
+            <div class="module-icon">
+                <i class="glyphicon glyphicon-music"></i>
+            </div>
+            <h3 class="module-title">添加水印</h3>
+            <p class="module-description">
+                为已上传的音频添加数字水印，保护音频版权
+            </p>
+            <div class="supported-formats" style="color: #e74c3c;">
+                <i class="glyphicon glyphicon-lock"></i> 无权限
+            </div>
+        </div>
+        {% endif %}
 
         <!-- 提取水印模块 -->
+        {% if can_extract %}
         <a href="{{ url_for('audio_extract_watermark') }}" class="module-card">
             <div class="module-icon">
                 <i class="glyphicon glyphicon-search"></i>
@@ -123,6 +139,20 @@
                 支持水印验证和提取
             </div>
         </a>
+        {% else %}
+        <div class="module-card" style="opacity: 0.6; cursor: not-allowed;" onclick="alert('您没有权限进行提取水印操作，请联系管理员'); return false;">
+            <div class="module-icon">
+                <i class="glyphicon glyphicon-search"></i>
+            </div>
+            <h3 class="module-title">提取水印</h3>
+            <p class="module-description">
+                从已处理的音频中提取数字水印信息
+            </p>
+            <div class="supported-formats" style="color: #e74c3c;">
+                <i class="glyphicon glyphicon-lock"></i> 无权限
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %} 

@@ -14,6 +14,7 @@ from flask import (
     request, send_file, session, url_for
 )
 from flask_login import current_user, login_required, login_user, logout_user
+from sqlalchemy import case
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -22,6 +23,7 @@ from watermark import app, db
 from watermark.forms.login_form import LoginForm
 from watermark.forms.register_form import RegisterForm
 from watermark.forms.watermark_form import WatermarkForm
+from watermark.forms.permission_form import UserPermissionForm, GroupManagementForm, UserGroupAssignmentForm
 from watermark.models import File, Group, User
 from watermark.utils.algorithm_selector import AlgorithmSelector
 from watermark.utils.file_config import (
@@ -714,7 +716,10 @@ def clear_all_extract_results():
 @app.route('/image/process')
 @login_required
 def image_process():
-    return render_template('image/image_process.html')
+    # 检查用户权限
+    can_embed = current_user.is_embed if current_user.is_embed is not None else True
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    return render_template('image/image_process.html', can_embed=can_embed, can_extract=can_extract)
 
 @app.route('/image/upload', methods=['GET', 'POST'])
 @login_required
@@ -999,6 +1004,11 @@ def image_extract_watermark():
 @app.route('/image/extract_from_file/<int:file_id>')
 @login_required
 def image_extract_from_file(file_id):
+    # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -1023,6 +1033,11 @@ def image_extract_from_file(file_id):
 @app.route('/image/extract_from_unwatermarked_file/<int:file_id>')
 @login_required
 def image_extract_from_unwatermarked_file(file_id):
+    # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -1085,7 +1100,11 @@ def image_extract_from_unwatermarked_file(file_id):
 @app.route('/audio/process')
 @login_required
 def audio_process():
-    return render_template('audio/audio_process.html')
+    # 检查用户权限
+    can_embed = current_user.is_embed if current_user.is_embed is not None else True
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    return render_template('audio/audio_process.html', can_embed=can_embed, can_extract=can_extract)
+
 
 @app.route('/audio/upload', methods=['GET', 'POST'])
 @login_required
@@ -1375,6 +1394,11 @@ def audio_extract_watermark():
 @app.route('/audio/extract_from_file/<int:file_id>')
 @login_required
 def audio_extract_from_file(file_id):
+    # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -1399,6 +1423,11 @@ def audio_extract_from_file(file_id):
 @app.route('/audio/extract_from_unwatermarked_file/<int:file_id>')
 @login_required
 def audio_extract_from_unwatermarked_file(file_id):
+    # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -1461,7 +1490,11 @@ def audio_extract_from_unwatermarked_file(file_id):
 @app.route('/video/process')
 @login_required
 def video_process():
-    return render_template('video/video_process.html')
+    # 检查用户权限
+    can_embed = current_user.is_embed if current_user.is_embed is not None else True
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    return render_template('video/video_process.html', can_embed=can_embed, can_extract=can_extract)
+
 
 @app.route('/video/upload', methods=['GET', 'POST'])
 @login_required
@@ -1748,6 +1781,11 @@ def video_extract_watermark():
 @app.route('/video/extract_from_file/<int:file_id>')
 @login_required
 def video_extract_from_file(file_id):
+    # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -1774,6 +1812,11 @@ def video_extract_from_file(file_id):
 @app.route('/video/extract_from_unwatermarked_file/<int:file_id>')
 @login_required
 def video_extract_from_unwatermarked_file(file_id):
+    # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -1836,8 +1879,11 @@ def video_extract_from_unwatermarked_file(file_id):
 @app.route('/text/process')
 @login_required
 def text_process():
-    return render_template('text/text_process.html')
-
+    # 检查用户权限
+    can_embed = current_user.is_embed if current_user.is_embed is not None else True
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    return render_template('text/text_process.html', can_embed=can_embed, can_extract=can_extract)
+  
 @app.route('/text/upload', methods=['GET', 'POST'])
 @login_required
 def text_upload():
@@ -2118,6 +2164,11 @@ def text_extract_watermark():
 @app.route('/text/extract_from_file/<int:file_id>')
 @login_required
 def text_extract_from_file(file_id):
+     # 检查用户是否有提取水印的权限
+    can_extract = current_user.is_extract if current_user.is_extract is not None else True
+    if not can_extract:
+        return jsonify({'error': '您没有权限进行提取水印操作，请联系管理员'})
+    
     # 获取文件记录
     file_record = File.query.get_or_404(file_id)
     if file_record.uploader_id != current_user.id:
@@ -2738,3 +2789,633 @@ def api_profile_retention():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ============================================================================
+# 权限管理相关路由
+# ============================================================================
+
+def admin_required(f):
+    """装饰器：要求管理员权限（普通管理员或超级管理员）"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.can_manage_groups():
+            flash('您没有权限访问此页面', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def group_admin_required(f):
+    """装饰器：要求组管理权限（管理员或超级管理员）"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.can_manage_groups():
+            flash('您没有权限访问此页面', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/admin/permission_management')
+@login_required
+@admin_required
+def permission_management():
+    """权限管理主页面"""
+    # 获取搜索和筛选参数
+    search = request.args.get('search', '').strip()
+    role_filter = request.args.get('role_filter', '')
+    status_filter = request.args.get('status_filter', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 12
+    
+    # 构建用户查询
+    query = User.query
+    
+    # 如果是普通管理员，只显示自己所属组的用户
+    if current_user.role == 'admin':
+        # 获取当前用户所属的组ID
+        user_group_ids = [group.id for group in current_user.groups]
+        if user_group_ids:
+            # 只查询与当前管理员在相同组的用户
+            query = query.join(User.groups).filter(Group.id.in_(user_group_ids))
+        else:
+            # 如果管理员不属于任何组，则只能看到自己
+            query = query.filter(User.id == current_user.id)
+    
+    if search:
+        query = query.filter(
+            (User.username.like(f'%{search}%')) |
+            (User.email.like(f'%{search}%'))
+        )
+    
+    if role_filter:
+        query = query.filter(User.role == role_filter)
+    
+    if status_filter:
+        if status_filter == 'active':
+            query = query.filter(User.is_active == True)
+        elif status_filter == 'inactive':
+            query = query.filter(User.is_active == False)
+    
+    # 分页查询（使用 distinct 避免重复）
+    # 排序：超级管理员排在第一位，然后按创建时间倒序
+    role_order = case(
+        (User.role == 'super_admin', 0),
+        (User.role == 'admin', 1),
+        else_=2
+    )
+    users_pagination = query.distinct().order_by(
+        role_order.asc(),
+        User.created_at.desc()
+    ).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    # 获取组信息
+    if current_user.role == 'admin':
+        # 普通管理员只能看到自己所属的组
+        groups = current_user.groups
+        # 只能看到自己所属组的用户
+        user_group_ids = [group.id for group in current_user.groups]
+        if user_group_ids:
+            all_users = User.query.join(User.groups).filter(
+                Group.id.in_(user_group_ids),
+                User.is_active == True
+            ).distinct().all()
+        else:
+            all_users = [current_user]
+    else:
+        # 超级管理员可以看到所有组和用户
+        groups = Group.query.all()
+        all_users = User.query.filter_by(is_active=True).all()
+    
+    # 创建分配表单
+    assignment_form = UserGroupAssignmentForm()
+    
+    # 统计数据
+    if current_user.role == 'admin':
+        # 普通管理员只统计自己所属组的数据
+        user_group_ids = [group.id for group in current_user.groups]
+        if user_group_ids:
+            total_users = User.query.join(User.groups).filter(Group.id.in_(user_group_ids)).distinct().count()
+            active_users = User.query.join(User.groups).filter(
+                Group.id.in_(user_group_ids),
+                User.is_active == True
+            ).distinct().count()
+            admin_users = User.query.join(User.groups).filter(
+                Group.id.in_(user_group_ids),
+                User.role.in_(['admin', 'super_admin'])
+            ).distinct().count()
+        else:
+            total_users = 1
+            active_users = 1 if current_user.is_active else 0
+            admin_users = 1
+        total_groups = len(current_user.groups)
+    else:
+        # 超级管理员统计全部数据
+        total_users = User.query.count()
+        active_users = User.query.filter_by(is_active=True).count()
+        admin_users = User.query.filter(User.role.in_(['admin', 'super_admin'])).count()
+        total_groups = Group.query.count()
+    
+    return render_template(
+        'admin/permission_management.html',
+        users_pagination=users_pagination,
+        groups=groups,
+        all_users=all_users,
+        assignment_form=assignment_form,
+        total_users=total_users,
+        active_users=active_users,
+        admin_users=admin_users,
+        total_groups=total_groups
+    )
+
+@app.route('/admin/add_user', methods=['POST'])
+@login_required
+@admin_required
+def add_user():
+    """添加新用户"""
+    username = request.form.get('username')
+    email = request.form.get('email')
+    password = request.form.get('password')
+    role = request.form.get('role', 'member')
+    
+    # 验证数据
+    if not username or not email or not password:
+        flash('请填写完整信息', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 检查用户名和邮箱是否已存在
+    if User.query.filter_by(username=username).first():
+        flash('用户名已存在', 'error')
+        return redirect(url_for('permission_management'))
+    
+    if User.query.filter_by(email=email).first():
+        flash('邮箱已被注册', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 权限检查：只有超级管理员可以创建超级管理员
+    if role == 'super_admin' and not current_user.is_super_admin():
+        flash('您没有权限创建超级管理员', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        # 创建新用户
+        user = User(
+            username=username,
+            email=email,
+            password=generate_password_hash(password),
+            role=role,
+            is_admin=(role in ['admin', 'super_admin'])
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        flash(f'用户 {username} 创建成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'创建用户失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/edit_user', methods=['POST'])
+@login_required
+@admin_required
+def edit_user():
+    """编辑用户信息（仅用户名、邮箱和水印权限）"""
+    user_id = request.form.get('user_id', type=int)
+    username = request.form.get('username')
+    email = request.form.get('email')
+    is_embed = request.form.get('is_embed') == '1'
+    is_extract = request.form.get('is_extract') == '1'
+    
+    user = User.query.get_or_404(user_id)
+    
+    # 不能编辑自己
+    if user.id == current_user.id:
+        flash('不能编辑自己的信息', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 检查用户名和邮箱唯一性
+    if username != user.username and User.query.filter_by(username=username).first():
+        flash('用户名已存在', 'error')
+        return redirect(url_for('permission_management'))
+    
+    if email != user.email and User.query.filter_by(email=email).first():
+        flash('邮箱已被注册', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        user.username = username
+        user.email = email
+        user.is_embed = is_embed
+        user.is_extract = is_extract
+        user.updated_at = get_now_utc()
+        
+        db.session.commit()
+        flash(f'用户 {username} 信息更新成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'更新用户信息失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/toggle_user_status', methods=['POST'])
+@login_required
+@admin_required
+def toggle_user_status():
+    """切换用户激活状态（管理员可停用同组用户）"""
+    user_id = request.form.get('user_id', type=int)
+    user = User.query.get_or_404(user_id)
+    
+    # 不能停用自己
+    if user.id == current_user.id:
+        flash('不能停用自己的账户', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 如果是普通管理员，检查是否在同一个组
+    if current_user.role == 'admin':
+        # 获取当前管理员的组ID
+        admin_group_ids = {group.id for group in current_user.groups}
+        # 获取目标用户的组ID
+        user_group_ids = {group.id for group in user.groups}
+        
+        # 检查是否有共同的组
+        if not admin_group_ids.intersection(user_group_ids):
+            flash('您只能停用/激活与您在同一组的用户', 'error')
+            return redirect(url_for('permission_management'))
+        
+        # 普通管理员不能停用管理员或超级管理员
+        if user.role in ['admin', 'super_admin']:
+            flash('普通管理员不能停用其他管理员', 'error')
+            return redirect(url_for('permission_management'))
+    
+    try:
+        user.is_active = not user.is_active
+        user.updated_at = get_now_utc()
+        db.session.commit()
+        
+        status = '激活' if user.is_active else '停用'
+        flash(f'用户 {user.username} 已{status}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'操作失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/quick_promote_to_admin', methods=['POST'])
+@login_required
+@admin_required
+def quick_promote_to_admin():
+    """快速提升用户为管理员"""
+    user_id = request.form.get('user_id', type=int)
+    user = User.query.get_or_404(user_id)
+    
+    # 不能操作自己
+    if user.id == current_user.id:
+        flash('不能修改自己的角色', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 检查当前用户是否有权限
+    if not current_user.is_super_admin():
+        flash('只有超级管理员可以提升用户为管理员', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        old_role = user.role
+        user.role = 'admin'
+        user.is_admin = True
+        user.updated_at = get_now_utc()
+        db.session.commit()
+        
+        flash(f'用户 {user.username} 已从 {old_role} 提升为管理员', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'提升失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/quick_demote_to_member', methods=['POST'])
+@login_required
+@admin_required
+def quick_demote_to_member():
+    """快速降级管理员为普通成员"""
+    user_id = request.form.get('user_id', type=int)
+    user = User.query.get_or_404(user_id)
+    
+    # 不能修改自己的角色
+    if user.id == current_user.id:
+        flash('不能修改自己的角色', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 只有超级管理员可以降级管理员
+    if not current_user.is_super_admin():
+        flash('只有超级管理员可以降级管理员', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 不能降级超级管理员
+    if user.is_super_admin():
+        flash('不能降级超级管理员', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        old_role = user.role
+        user.role = 'member'
+        user.is_admin = False
+        user.updated_at = get_now_utc()
+        db.session.commit()
+        
+        flash(f'用户 {user.username} 已从 {old_role} 降级为普通成员', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'降级失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/delete_user', methods=['POST'])
+@login_required
+@admin_required
+def delete_user():
+    """删除用户（管理员可删除同组用户）"""
+    user_id = request.form.get('user_id', type=int)
+    user = User.query.get_or_404(user_id)
+    
+    # 不能删除自己
+    if user.id == current_user.id:
+        flash('不能删除自己的账户', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 如果是普通管理员，检查是否在同一个组
+    if current_user.role == 'admin':
+        # 获取当前管理员的组ID
+        admin_group_ids = {group.id for group in current_user.groups}
+        # 获取目标用户的组ID
+        user_group_ids = {group.id for group in user.groups}
+        
+        # 检查是否有共同的组
+        if not admin_group_ids.intersection(user_group_ids):
+            flash('您只能删除与您在同一组的用户', 'error')
+            return redirect(url_for('permission_management'))
+        
+        # 普通管理员不能删除管理员或超级管理员
+        if user.role in ['admin', 'super_admin']:
+            flash('普通管理员不能删除其他管理员', 'error')
+            return redirect(url_for('permission_management'))
+    
+    try:
+        username = user.username
+        
+        # 删除用户上传的所有文件（物理文件和数据库记录）
+        user_files = File.query.filter_by(uploader_id=user.id).all()
+        for file in user_files:
+            # 删除物理文件
+            try:
+                if file.original_path and os.path.exists(file.original_path):
+                    os.remove(file.original_path)
+                if file.watermarked_path and os.path.exists(file.watermarked_path):
+                    os.remove(file.watermarked_path)
+            except Exception as e:
+                print(f"删除文件失败: {str(e)}")
+            
+            # 删除数据库记录
+            db.session.delete(file)
+        
+        # 清除用户的组关系
+        user.groups = []
+        
+        # 删除用户
+        db.session.delete(user)
+        db.session.commit()
+        
+        flash(f'用户 {username} 及其所有数据已删除', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'删除用户失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/batch_delete_users', methods=['POST'])
+@login_required
+@admin_required
+def batch_delete_users():
+    """批量删除用户"""
+    user_ids_str = request.form.get('user_ids', '')
+    
+    if not user_ids_str:
+        flash('没有选择要删除的用户', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 只有超级管理员可以批量删除用户
+    if not current_user.is_super_admin():
+        flash('只有超级管理员可以批量删除用户', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        user_ids = [int(id.strip()) for id in user_ids_str.split(',') if id.strip()]
+        
+        # 过滤掉当前用户
+        user_ids = [uid for uid in user_ids if uid != current_user.id]
+        
+        if not user_ids:
+            flash('没有可删除的用户', 'error')
+            return redirect(url_for('permission_management'))
+        
+        # 查询要删除的用户
+        users = User.query.filter(User.id.in_(user_ids)).all()
+        
+        success_count = 0
+        error_count = 0
+        
+        for user in users:
+            try:
+                # 删除用户上传的所有文件
+                user_files = File.query.filter_by(uploader_id=user.id).all()
+                for file in user_files:
+                    try:
+                        if file.original_path and os.path.exists(file.original_path):
+                            os.remove(file.original_path)
+                        if file.watermarked_path and os.path.exists(file.watermarked_path):
+                            os.remove(file.watermarked_path)
+                    except Exception:
+                        pass
+                    db.session.delete(file)
+                
+                # 清除用户的组关系
+                user.groups = []
+                
+                # 删除用户
+                db.session.delete(user)
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                print(f"删除用户 {user.username} 失败: {str(e)}")
+        
+        db.session.commit()
+        
+        if success_count > 0:
+            flash(f'成功删除 {success_count} 个用户', 'success')
+        if error_count > 0:
+            flash(f'删除失败 {error_count} 个用户', 'error')
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f'批量删除失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/add_group', methods=['POST'])
+@login_required
+@group_admin_required
+def add_group():
+    """添加新组（仅超级管理员）"""
+    # 只有超级管理员可以创建新组
+    if not current_user.is_super_admin():
+        flash('只有超级管理员可以创建新组', 'error')
+        return redirect(url_for('permission_management'))
+    
+    name = request.form.get('name')
+    description = request.form.get('description', '')
+    
+    if not name:
+        flash('请输入组名', 'error')
+        return redirect(url_for('permission_management'))
+    
+    # 检查组名是否已存在
+    if Group.query.filter_by(name=name).first():
+        flash('组名已存在', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        group = Group(name=name, description=description)
+        db.session.add(group)
+        db.session.commit()
+        
+        flash(f'组 {name} 创建成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'创建组失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/edit_group', methods=['POST'])
+@login_required
+@group_admin_required
+def edit_group():
+    """编辑组信息"""
+    group_id = request.form.get('group_id', type=int)
+    name = request.form.get('name')
+    description = request.form.get('description', '')
+    
+    group = Group.query.get_or_404(group_id)
+    
+    # 检查组名唯一性
+    if name != group.name and Group.query.filter_by(name=name).first():
+        flash('组名已存在', 'error')
+        return redirect(url_for('permission_management'))
+    
+    try:
+        group.name = name
+        group.description = description
+        db.session.commit()
+        
+        flash(f'组 {name} 信息更新成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'更新组信息失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/delete_group', methods=['POST'])
+@login_required
+@group_admin_required
+def delete_group():
+    """删除组（仅超级管理员）"""
+    # 只有超级管理员可以删除组
+    if not current_user.is_super_admin():
+        flash('只有超级管理员可以删除组', 'error')
+        return redirect(url_for('permission_management'))
+    
+    group_id = request.form.get('group_id', type=int)
+    group = Group.query.get_or_404(group_id)
+    
+    try:
+        # 检查组是否有成员
+        if group.users:
+            flash(f'组 {group.name} 还有成员，无法删除', 'error')
+            return redirect(url_for('permission_management'))
+        
+        db.session.delete(group)
+        db.session.commit()
+        
+        flash(f'组 {group.name} 删除成功', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'删除组失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/assign_user_to_group', methods=['POST'])
+@login_required
+@group_admin_required
+def assign_user_to_group():
+    """分配用户到组"""
+    user_id = request.form.get('user_id', type=int)
+    group_id = request.form.get('group_ids', type=int)
+    
+    user = User.query.get_or_404(user_id)
+    group = Group.query.get_or_404(group_id)
+    
+    try:
+        if group not in user.groups:
+            user.groups.append(group)
+            db.session.commit()
+            flash(f'用户 {user.username} 已加入组 {group.name}', 'success')
+        else:
+            flash(f'用户 {user.username} 已在组 {group.name} 中', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'分配失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/manage_user_groups', methods=['POST'])
+@login_required
+@group_admin_required
+def manage_user_groups():
+    """管理用户的组分配"""
+    user_id = request.form.get('user_id', type=int)
+    group_ids = request.form.getlist('group_ids', type=int)
+    
+    user = User.query.get_or_404(user_id)
+    
+    try:
+        # 获取选中的组
+        selected_groups = Group.query.filter(Group.id.in_(group_ids)).all() if group_ids else []
+        
+        # 更新用户的组关系
+        user.groups = selected_groups
+        db.session.commit()
+        
+        flash(f'用户 {user.username} 的组分配已更新', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'更新组分配失败: {str(e)}', 'error')
+    
+    return redirect(url_for('permission_management'))
+
+@app.route('/admin/get_user_groups')
+@login_required
+@group_admin_required
+def get_user_groups():
+    """获取用户的组信息（AJAX接口）"""
+    user_id = request.args.get('user_id', type=int)
+    user = User.query.get_or_404(user_id)
+    
+    all_groups = Group.query.all()
+    user_group_ids = [group.id for group in user.groups]
+    
+    return jsonify({
+        'user_groups': user_group_ids,
+        'all_groups': [{'id': g.id, 'name': g.name, 'description': g.description} for g in all_groups]
+    })

@@ -23,6 +23,12 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(64), unique=True, nullable=False)     # 邮箱
     password = db.Column(db.String(512), nullable=False)              # 密码
     is_admin = db.Column(db.Boolean, default=False)                  # 是否管理员
+    role = db.Column(db.String(20), default='member')                # 用户角色：super_admin, admin, member
+    created_at = db.Column(db.DateTime, default=get_now_utc)         # 创建时间
+    updated_at = db.Column(db.DateTime, default=get_now_utc, onupdate=get_now_utc)  # 更新时间
+    is_active = db.Column(db.Boolean, default=True)                 # 是否激活
+    is_embed = db.Column(db.Boolean, default=True)                 # 是否允许嵌入水印
+    is_extract = db.Column(db.Boolean, default=True) 
     retention_days = db.Column(db.Integer, nullable=True)            # 用户自定义文件保留天数（为空表示使用系统默认）
 
     # 关系
@@ -33,6 +39,22 @@ class User(db.Model, UserMixin):
     def get_id(self):
         return str(self.id)
 
+    def is_super_admin(self):
+        """检查是否为超级管理员"""
+        return self.role == 'super_admin'
+    
+    def is_admin_user(self):
+        """检查是否为管理员（包括超级管理员）"""
+        return self.role in ['super_admin', 'admin']
+    
+    def can_manage_users(self):
+        """检查是否有用户管理权限"""
+        return self.role == 'super_admin'
+    
+    def can_manage_groups(self):
+        """检查是否有组管理权限"""
+        return self.role in ['super_admin', 'admin']
+    
 # 3. 用户组表
 class Group(db.Model):
     __tablename__ = 'groups'
