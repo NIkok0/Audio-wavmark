@@ -3,7 +3,7 @@ import numpy as np
 from scipy.io import wavfile
 import wave
 from flask import current_app
-from watermark.utils.path_utils import get_user_dated_embed_dir
+from .path_utils import get_user_dated_embed_dir
 
 # 添加算法时前三个函数不用动，是自动调用的
 import sys
