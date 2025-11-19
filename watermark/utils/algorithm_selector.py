@@ -171,9 +171,12 @@ class AlgorithmSelector:
             try:
                 self.logger.info(f"尝试使用算法 {algorithm} 提取水印 from {file_path}")
                 result = extract_func(file_path, algorithm)
-                
+                # 统一转成字符串再判断是否为空，兼容 dict/列表等结构
+                result_text = result if isinstance(result, str) else str(result)
+                result_text = result_text.strip()
+
                 # 检查结果是否有效
-                if result and result.strip():
+                if result_text:
                     self.logger.info(f"算法 {algorithm} 成功提取水印: {result}")
                     attempt_results.append({
                         'algorithm': algorithm,

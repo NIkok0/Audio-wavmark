@@ -6,10 +6,15 @@ Supports encoding and decoding watermarks in audio signals with configurable par
 """
 
 from typing import Optional, Tuple, Dict, Any, Union
+from pathlib import Path
 import torch
 import numpy as np
-from huggingface_hub import hf_hub_download
 import logging
+
+try:
+    from huggingface_hub import hf_hub_download
+except ImportError:
+    hf_hub_download = None
 
 from .utils import wm_add_util, file_reader, wm_decode_util, my_parser, metric_util, path_util
 from .models import my_model
@@ -19,7 +24,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
+MODULE_DIR = Path(__file__).resolve().parent
 DEFAULT_SAMPLE_RATE = 16000
+DEFAULT_MODEL_FILENAME = "step59000_snr39.99_pesq4.35_BERP_none0.30_mean1.81_std1.81.model.pkl"
 DEFAULT_MODEL_CONFIG = {
     "num_point": 16000,
     "num_bit": 32,
@@ -52,10 +59,20 @@ def load_model(path: str = "default", device: Optional[str] = None) -> my_model.
     """
     try:
         if path == "default":
-            resume_path = hf_hub_download(
-                repo_id="M4869/WavMark",
-                filename="step59000_snr39.99_pesq4.35_BERP_none0.30_mean1.81_std1.81.model.pkl",
-            )
+            local_model_path = MODULE_DIR / "utils" / DEFAULT_MODEL_FILENAME
+            if local_model_path.exists():
+                resume_path = str(local_model_path)
+                logger.info(f"Loading local WavMark model: {resume_path}")
+            else:
+                if hf_hub_download is None:
+                    raise RuntimeError(
+                        "huggingface_hub 未安装，且本地未找到默认模型文件，无法加载。"
+                    )
+                logger.info("Local model not found, downloading from HuggingFace Hub...")
+                resume_path = hf_hub_download(
+                    repo_id="M4869/WavMark",
+                    filename=DEFAULT_MODEL_FILENAME,
+                )
         else:
             resume_path = path
         

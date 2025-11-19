@@ -700,10 +700,17 @@
             const filename = fileItem ? fileItem.getAttribute('data-filename') : `ID ${id}`;
             renderClientResult(filename, data);
             var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            
+            // 检查是否有错误或未找到载荷
             if (data && data.error) {
                 if (window.AppLoading) AppLoading.alertDanger('提取失败');
                 showCenterError(data.error || '提取失败，请重试或更换文件。');
+            } else if (!data || !data.payload_display) {
+                // 未找到水印载荷也视为提取失败
+                if (window.AppLoading) AppLoading.alertDanger('提取失败');
+                showCenterError('未找到水印载荷，提取失败。');
             } else {
+                // 成功提取到水印载荷
                 if (window.AppLoading) AppLoading.alertSuccess('成功提取水印！用时 ' + elapsed + ' 秒');
             }
         } catch (e) {
@@ -727,9 +734,17 @@
         section.style.display = '';
         const wrapper = document.createElement('div');
         wrapper.className = 'result-item';
-        var content = (data && data.extracted_text)
-            ? ('<strong>提取的水印：</strong>' + data.extracted_text)
-            : ('<strong>错误：</strong>' + ((data && data.error) || '未知错误'));
+        
+        // 只显示 decoded_payload
+        var content;
+        if (data && data.error) {
+            content = '<strong>错误：</strong>' + (data.error || '未知错误');
+        } else if (data && data.payload_display) {
+            // 后端已经格式化好了，直接显示
+            content = '<strong>水印载荷：</strong>' + data.payload_display;
+        } else {
+            content = '<strong>提取失败：</strong>未找到水印载荷';
+        }
         
         // 为每个结果项生成唯一ID
         var resultId = 'result_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -912,6 +927,10 @@
                 }
                 if (window.AppLoading) AppLoading.alertDanger('提取失败');
                 showCenterError(errorMsg || '提取失败，请重试或更换文件。');
+            } else if (data && !data.payload_display) {
+                // 未找到水印载荷也视为提取失败
+                if (window.AppLoading) AppLoading.alertDanger('提取失败');
+                showCenterError('未找到水印载荷，提取失败。');
             } else {
                 var algorithmInfo = data.algorithm ? `使用算法: ${data.algorithm}` : '';
                 
@@ -930,8 +949,7 @@
                 
                 if (window.AppLoading) AppLoading.alertSuccess('提取成功！');
                 showCenterSuccess(successMsg, detailMsg);
-                // 提取成功后刷新页面，以显示已转移到已添加水印列表的文件
-                setTimeout(() => location.reload(), 2500);
+                // 自动刷新已取消，如需查看最新列表请手动刷新或返回列表页
             }
         } catch (e) {
             renderClientResult(`ID ${id}` , { error: String(e) });
@@ -957,11 +975,11 @@
             <div class="center-modal error-modal">
                 <div class="modal-head">
                     <strong><i class="glyphicon glyphicon-exclamation-sign"></i> 提取失败</strong>
-                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">${message || '提取失败，请重试或更换文件。'}</div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-danger" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                    <button type="button" class="btn btn-danger" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();">我知道了</button>
                 </div>
             </div>`;
         document.body.appendChild(backdrop);
@@ -979,12 +997,12 @@
             <div class="center-modal success-modal">
                 <div class="modal-head">
                     <strong><i class="glyphicon glyphicon-ok-sign"></i> 提取成功</strong>
-                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                    <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">${message || '成功提取水印！'}</div>
                 ${detailMessage ? `<div class="modal-footer">${detailMessage}</div>` : '<div class="modal-footer">详细信息请查看页面底部的提取结果</div>'}
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-success" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                    <button type="button" class="btn btn-success" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();">我知道了</button>
                 </div>
             </div>`;
         document.body.appendChild(backdrop);

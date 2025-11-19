@@ -5,6 +5,8 @@ import os
 import random
 import re
 import shutil
+import json
+import ast
 from datetime import datetime, timedelta
 from watermark.utils.time_provider import get_now_utc
 
@@ -233,6 +235,9 @@ def process_watermark(file_path, watermark_text, operation_type='embed', file_id
                         extracted_text = extracted_text.decode('utf-8')
                     except UnicodeDecodeError:
                         extracted_text = str(extracted_text)
+                # 如果是字典，转换为 JSON 字符串
+                elif isinstance(extracted_text, dict):
+                    extracted_text = json.dumps(extracted_text, ensure_ascii=False)
                 # 如果是其他类型，转换为字符串
                 elif not isinstance(extracted_text, str):
                     extracted_text = str(extracted_text)
@@ -292,6 +297,82 @@ def get_user_files(user, file_type, has_watermark=None):
     
     # 按创建时间降序排序
     return query.order_by(File.created_at.desc()).all()
+
+def extract_audio_payload_display(extracted_text):
+    """从音频提取结果中提取载荷展示文本.
+
+    尝试解析提取结果为 dict, 读取可能的 payload 字段(decoded_payload/payload/watermark_payload)
+    或其 result 子项中的同名字段。若为列表/元组则转为空格分隔的位串。
+    返回字符串或 None。
+    """
+    if extracted_text is None:
+        current_app.logger.warning('extract_audio_payload_display: extracted_text is None')
+        return None
+    
+    current_app.logger.info(f'extract_audio_payload_display: extracted_text type={type(extracted_text)}, value={extracted_text[:200] if isinstance(extracted_text, str) else extracted_text}')
+    
+    data = None
+    if isinstance(extracted_text, dict):
+        data = extracted_text
+    else:
+        text = str(extracted_text).strip()
+        if not text:
+            current_app.logger.warning('extract_audio_payload_display: text is empty')
+            return None
+        try:
+            data = json.loads(text)
+            current_app.logger.info(f'extract_audio_payload_display: JSON parse success, data={data}')
+        except Exception as e:
+            current_app.logger.warning(f'extract_audio_payload_display: JSON parse failed: {e}')
+            try:
+                # 尝试将 Python 单引号字典转为 JSON 格式
+                text_fixed = text.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                data = json.loads(text_fixed)
+                current_app.logger.info(f'extract_audio_payload_display: Fixed JSON parse success, data={data}')
+            except Exception as e2:
+                current_app.logger.warning(f'extract_audio_payload_display: Fixed JSON parse failed: {e2}')
+                try:
+                    data = ast.literal_eval(text)
+                    current_app.logger.info(f'extract_audio_payload_display: ast.literal_eval success, data={data}')
+                except Exception as e3:
+                    current_app.logger.error(f'extract_audio_payload_display: All parse methods failed: {e3}')
+                    return None
+    if not isinstance(data, dict):
+        current_app.logger.warning(f'extract_audio_payload_display: data is not dict, type={type(data)}')
+        return None
+
+    def pick_payload(container):
+        if not isinstance(container, dict):
+            return None
+        for key in ('decoded_payload', 'payload', 'watermark_payload'):
+            if key in container:
+                return container.get(key)
+        return None
+
+    payload = pick_payload(data)
+    if payload is None and isinstance(data.get('result'), dict):
+        payload = pick_payload(data['result'])
+    
+    if payload is None:
+        current_app.logger.warning(f'extract_audio_payload_display: No payload found in data. Keys: {data.keys()}')
+        return None
+    
+    current_app.logger.info(f'extract_audio_payload_display: Found payload={payload}')
+    
+    if isinstance(payload, (list, tuple)):
+        cleaned_bits = []
+        for bit in payload:
+            if isinstance(bit, (int, float)):
+                cleaned_bits.append(str(int(bit)))
+            else:
+                cleaned_bits.append(str(bit))
+        bit_string = ' '.join(cleaned_bits)
+        result = f"[{bit_string}]" if bit_string else None
+        current_app.logger.info(f'extract_audio_payload_display: Returning formatted result={result}')
+        return result
+    result = str(payload)
+    current_app.logger.info(f'extract_audio_payload_display: Returning string result={result}')
+    return result
 
 def get_user_files_pagination(user, file_type, has_watermark=None, page=1, per_page=5):
     """获取用户的文件列表（分页版本）"""
@@ -585,6 +666,7 @@ def delete_file(file_id):
     # 记录文件路径以便删除
     original_path = file.original_path
     watermarked_path = file.watermarked_path
+    has_watermark = file.has_watermark
     
     # 从数据库中删除记录
     db.session.delete(file)
@@ -592,11 +674,15 @@ def delete_file(file_id):
     
     # 尝试删除物理文件
     try:
-        if original_path and os.path.exists(original_path):
-            os.remove(original_path)
-            
-        if watermarked_path and os.path.exists(watermarked_path):
-            os.remove(watermarked_path)
+        # 如果是已加水印的文件，只删除watermarked_path（embed目录中的文件）
+        # 不删除original_path，因为可能有同名的未加水印文件在使用这个路径
+        if has_watermark:
+            if watermarked_path and os.path.exists(watermarked_path):
+                os.remove(watermarked_path)
+        else:
+            # 如果是未加水印的文件，只删除original_path（upload目录中的文件）
+            if original_path and os.path.exists(original_path):
+                os.remove(original_path)
             
         # 记录删除日志
         # OperationLogger.log_delete(
@@ -1005,7 +1091,7 @@ def image_extract_from_file(file_id):
         return jsonify({'error': '您没有权限处理该文件'})
     
     # 提取水印
-    extracted_text, _, error = process_watermark(
+    extracted_text, algorithm, error = process_watermark(
         file_record.watermarked_path,
         None,
         'extract',
@@ -1014,6 +1100,12 @@ def image_extract_from_file(file_id):
     
     if error:
         return jsonify({'error': f'水印提取失败: {error}'})
+    
+    # 检查提取结果是否有效
+    if not extracted_text or (isinstance(extracted_text, str) and not extracted_text.strip()):
+        return jsonify({
+            'error': f'水印提取失败: 尝试了{algorithm or "DCT"}，当前文件水印为空'
+        })
     
     return jsonify({
         'success': True,
@@ -1039,10 +1131,20 @@ def image_extract_from_unwatermarked_file(file_id):
             'attempt_results': attempt_results
         })
     
+    # 检查提取结果是否有效
+    if not extracted_text or (isinstance(extracted_text, str) and not extracted_text.strip()):
+        # 构建与文档一致的错误消息
+        algorithms_tried = [r['algorithm'] for r in attempt_results] if attempt_results else []
+        algorithms_str = ', '.join(algorithms_tried) if algorithms_tried else '所有可用算法'
+        return jsonify({
+            'error': f'水印提取失败: 尝试了{algorithms_str}，当前文件水印为空',
+            'attempt_results': attempt_results
+        })
+    
     # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
     try:
         # 获取用户的 embed 目录
-        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'image')
+        user_embed_dir = get_user_dated_embed_dir('image')
         
         # 生成唯一的文件名（保持原始扩展名）
         file_ext = os.path.splitext(file_record.filename)[1]
@@ -1349,7 +1451,8 @@ def audio_extract_watermark():
         
         return jsonify({
             'success': True,
-            'extracted_text': extracted_text
+            'extracted_text': extracted_text,
+            'payload_display': extract_audio_payload_display(extracted_text)
         })
     
     # 获取未添加水印的文件列表（待处理的文件）
@@ -1381,7 +1484,7 @@ def audio_extract_from_file(file_id):
         return jsonify({'error': '您没有权限处理该文件'})
     
     # 提取水印
-    extracted_text, _, error = process_watermark(
+    extracted_text, algorithm, error = process_watermark(
         file_record.watermarked_path,
         None,
         'extract',
@@ -1391,9 +1494,19 @@ def audio_extract_from_file(file_id):
     if error:
         return jsonify({'error': f'水印提取失败: {error}'})
     
+    # 提取载荷显示
+    payload_display = extract_audio_payload_display(extracted_text)
+    
+    # 如果无法提取载荷，返回错误
+    if not payload_display:
+        return jsonify({
+            'error': f'水印提取失败: 尝试了{algorithm or "AI"}，当前文件水印为空'
+        })
+    
     return jsonify({
         'success': True,
-        'extracted_text': extracted_text
+        'extracted_text': extracted_text,
+        'payload_display': payload_display
     })
 
 @app.route('/audio/extract_from_unwatermarked_file/<int:file_id>')
@@ -1415,10 +1528,23 @@ def audio_extract_from_unwatermarked_file(file_id):
             'attempt_results': attempt_results
         })
     
+    # 提取载荷显示
+    payload_display = extract_audio_payload_display(extracted_text)
+    
+    # 如果无法提取载荷，返回错误
+    if not payload_display:
+        # 构建与文档一致的错误消息
+        algorithms_tried = [r['algorithm'] for r in attempt_results] if attempt_results else []
+        algorithms_str = ', '.join(algorithms_tried) if algorithms_tried else '所有可用算法'
+        return jsonify({
+            'error': f'水印提取失败: 尝试了{algorithms_str}，当前文件水印为空',
+            'attempt_results': attempt_results
+        })
+    
     # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
     try:
         # 获取用户的 embed 目录
-        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'audio')
+        user_embed_dir = get_user_dated_embed_dir('audio')
         
         # 生成唯一的文件名（保持原始扩展名）
         file_ext = os.path.splitext(file_record.filename)[1]
@@ -1453,6 +1579,7 @@ def audio_extract_from_unwatermarked_file(file_id):
     return jsonify({
         'success': True,
         'extracted_text': extracted_text,
+        'payload_display': payload_display,
         'algorithm': algorithm,
         'attempt_results': attempt_results
     })
@@ -1779,58 +1906,47 @@ def video_extract_from_unwatermarked_file(file_id):
     if file_record.uploader_id != current_user.id:
         return jsonify({'error': '您没有权限处理该文件'})
     
-    # 尝试所有算法从原始文件提取水印
+    # 第一步：尝试所有算法从原始文件提取（得到的是存储时的哈希/编码值）
     extracted_text, algorithm, error, attempt_results = process_watermark_try_all_algorithms(
         file_record.original_path
     )
-    
     if error:
         return jsonify({
             'error': f'水印提取失败: {error}',
             'attempt_results': attempt_results
         })
-    
-    # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
-    try:
-        # 获取用户的 embed 目录
-        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'video')
-        
-        # 生成唯一的文件名（保持原始扩展名）
-        file_ext = os.path.splitext(file_record.filename)[1]
-        unique_filename = f"{file_record.file_hash}_embed{file_ext}"
-        embed_file_path = os.path.join(user_embed_dir, unique_filename)
-        
-        # 复制文件到 embed 目录
-        shutil.copy2(file_record.original_path, embed_file_path)
-        
-        watermarked_file = File(
-            filename=file_record.filename,
-            original_path=file_record.original_path,
-            watermarked_path=embed_file_path,  # 使用 embed 目录下的路径
-            file_hash=file_record.file_hash,
-            file_watermark_hash=file_record.file_hash,
-            file_type=file_record.file_type,
-            file_format=file_record.file_format,
-            file_size=file_record.file_size,
-            mime_type=file_record.mime_type,
-            uploader_id=current_user.id,
-            has_watermark=True,
-            watermark_type=algorithm or 'Unknown',
-            watermark_text=extracted_text,
-            processing_status='completed'
+
+    # 第二步：用提取得到的值匹配数据库中已加水印的记录 (watermark_text字段)
+    # 仅在当前用户范围内查找，避免泄露其他用户水印
+    matched_record = (
+        File.query
+        .filter(
+            File.file_type == 'video',
+            File.has_watermark == True,
+            File.uploader_id == current_user.id,
+            File.watermark_text == extracted_text
         )
-        db.session.add(watermarked_file)
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error creating watermarked file record: {e}")
-    
-    return jsonify({
-        'success': True,
-        'extracted_text': extracted_text,
-        'algorithm': algorithm,
-        'attempt_results': attempt_results
-    })
+        .order_by(File.created_at.desc())
+        .first()
+    )
+
+    if matched_record:
+        # 成功匹配：返回原始水印文本 original_watermark_text 作为最终提取水印
+        return jsonify({
+            'success': True,
+            'extracted_text': matched_record.original_watermark_text,
+            'algorithm': algorithm,
+            'attempt_results': attempt_results
+        })
+    else:
+        # 未匹配到：告知无对应原始水印
+        return jsonify({
+            'success': False,
+            'error': '未匹配到对应的水印记录',
+            'extracted_text': None,
+            'algorithm': algorithm,
+            'attempt_results': attempt_results
+        })
 
 # 文档处理相关路由
 @app.route('/text/process')
@@ -2161,7 +2277,7 @@ def text_extract_from_unwatermarked_file(file_id):
     # 成功提取水印后，将文件复制到 embed 文件夹，并创建一个已添加水印的文件记录
     try:
         # 获取用户的 embed 目录
-        user_embed_dir = get_user_dated_embed_dir(current_user.username, 'text')
+        user_embed_dir = get_user_dated_embed_dir('text')
         
         # 生成唯一的文件名（保持原始扩展名）
         file_ext = os.path.splitext(file_record.filename)[1]

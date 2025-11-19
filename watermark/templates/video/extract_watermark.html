@@ -770,12 +770,12 @@
                 <div class="center-modal success-modal">
                     <div class="modal-head">
                         <strong><i class="glyphicon glyphicon-ok-sign"></i> 提取成功</strong>
-                        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();"><span aria-hidden="true">&times;</span></button>
                     </div>
                     <div class="modal-body">${message || '成功提取水印！'}</div>
                     ${detailMessage ? `<div class="modal-footer">${detailMessage}</div>` : '<div class="modal-footer">详细信息请查看页面底部的提取结果</div>'}
                     <div class="modal-actions">
-                        <button type="button" class="btn btn-success" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                        <button type="button" class="btn btn-success" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();">我知道了</button>
                     </div>
                 </div>`;
         } else {
@@ -783,11 +783,11 @@
                 <div class="center-modal error-modal">
                     <div class="modal-head">
                         <strong><i class="glyphicon glyphicon-exclamation-sign"></i> 提取失败</strong>
-                        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove()"><span aria-hidden="true">&times;</span></button>
+                        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();"><span aria-hidden="true">&times;</span></button>
                     </div>
                     <div class="modal-body">${message || '提取失败，请重试或更换文件。'}</div>
                     <div class="modal-actions">
-                        <button type="button" class="btn btn-danger" onclick="document.getElementById('centerModalBackdrop').remove()">我知道了</button>
+                        <button type="button" class="btn btn-danger" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();">我知道了</button>
                     </div>
                 </div>`;
         }
@@ -1030,8 +1030,7 @@
                     
                     showAlert('success', successMsg, detailMsg);
                     renderClientResult(filename, data);
-                    // 提取成功后刷新页面，以显示已转移到已添加水印列表的文件
-                    setTimeout(() => location.reload(), 2500);
+                    // 自动刷新已取消，如需查看最新列表请手动刷新或返回列表页
                 }
             })
             .catch(error => {
