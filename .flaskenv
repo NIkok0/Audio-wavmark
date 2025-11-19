@@ -2,7 +2,7 @@ FLASK_ENV=development
 FLASK_DEBUG=1
 FLASK_APP=watermark
 SECRET_KEY=your_secret_key_here
-SQLALCHEMY_DATABASE_URI=mysql+pymysql://root:88888888@localhost:3306/uestcwm
+SQLALCHEMY_DATABASE_URI=mysql+pymysql://root:123456@localhost:3306/uestcwm
 SQLALCHEMY_TRACK_MODIFICATIONS=False
 
 # 基础路径配置

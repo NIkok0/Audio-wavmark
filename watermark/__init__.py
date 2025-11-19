@@ -77,7 +77,7 @@ def get_media_folder(media_type, folder_type):
 app.jinja_env.globals.update(get_media_folder=get_media_folder)
 
 # 配置数据库
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'mysql+pymysql://root:88888888@localhost:3306/watermark_test')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'mysql+pymysql://root:123456@localhost:3306/watermark_test')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIFICATIONS', 'False').lower() in ('true', '1', 't')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
 app.config['DEBUG'] = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
