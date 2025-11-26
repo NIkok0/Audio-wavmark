@@ -75,70 +75,99 @@
 
 ### 环境要求
 
-- Python 3.9+
+- **Python 3.9.23** (必须为 3.9.23 版本，不支持其他版本)
 - FFmpeg (用于视频、音频流处理)
-- FFprobe （用于视频、音频流处理）
+- FFprobe (用于视频、音频流处理)
 
 ### 安装步骤
 
-1. **克隆项目**
+1. **检查 Python 版本**
 
 ```bash
-因为项目中存在大文件 并且使用了LFS对大文件进行了托管（github存在100m的文件大小限制）
-先安装LFS
-第一步：git lfs install
-
-第二步：git clone <repository-url>
-拉取仓库的普通文件，此时会把大文件的指针也拉下来
-
-第三步：git lfs pull
-拉取大文件
-
+python --version
+# 输出应为: Python 3.9.23
 ```
 
-2. **创建虚拟环境**
+如果 Python 版本不是 3.9.23，请先安装正确的版本。
+
+2. **克隆项目**
+
+```bash
+# 由于项目中存在大文件，已使用 Git LFS 进行托管（GitHub 有 100MB 文件大小限制）
+
+# 第一步：安装 Git LFS
+git lfs install
+
+# 第二步：克隆仓库（拉取普通文件和大文件指针）
+git clone <repository-url>
+
+# 第三步：拉取大文件
+git lfs pull
+```
+
+3. **创建虚拟环境**
+
+**推荐使用 Conda**（更容易管理 Python 版本）：
+
+```bash
+# 创建 conda 环境
+conda create -n watermark python=3.9.23
+
+# 激活环境
+conda activate watermark
+```
+
+或使用 venv：
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或
-venv\Scripts\activate  # Windows
+
+# Linux/Mac
+source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
 ```
 
-或者
+4. **安装依赖**
 
 ```bash
-conda 环境创建
-（建议使用conda环境）
-```
-
-3. **安装依赖**
-
-```bash
+# 安装所有依赖
 pip install -r requirements.txt
+```
 
-安装遇到需要gpu版本的torch使用以下代码
+**如果需要 GPU 版本的 PyTorch**：
+
+```bash
 pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu118
 ```
 
-4. **初始化数据库**
+5. **配置数据库**
 
-```bash
-在.flaskenv中调整自己的mysql数据库密码和端口
+编辑 `.flaskenv` 文件，设置你的 MySQL 数据库配置：
+
+```
+DATABASE_URL=mysql+pymysql://username:password@localhost:3306/watermark_db
+FLASK_ENV=development
 ```
 
+6. **初始化数据库**
+
 ```bash
-$env:FLASK_APP="watermark"
-flask initdb 
+export FLASK_APP=watermark  # Linux/Mac
+# 或
+$env:FLASK_APP="watermark"  # Windows PowerShell
+
+flask initdb
 ```
 
-5. **运行应用**
+7. **运行应用**
 
 ```bash
 flask run
 ```
 
-访问 http://localhost:5000 即可使用系统。
+访问 http://localhost:5000 开始使用系统。
 
 ## 使用指南
 

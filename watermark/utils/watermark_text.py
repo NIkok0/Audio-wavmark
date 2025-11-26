@@ -171,6 +171,7 @@ def extract_txt_zbit(input_file):
 # DOC格式
 def embed_doc_space(input_file, watermark):
     """DOC格式专用"""
+    import pythoncom
     import win32com.client
     import os
 
@@ -179,10 +180,9 @@ def embed_doc_space(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'doc'}"
 
     # 从app.config获取保存路径
-    embed_dir = get_user_dated_embed_dir('text')
+    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
     full_path = os.path.join(embed_dir, filename)
 
-    # 保存文件
     def embed_watermark_in_char_spacing(doc_path, output_path, watermark_text):
         """
         将 watermark_text 以二进制形式嵌入到 doc 文档中：
@@ -193,56 +193,63 @@ def embed_doc_space(input_file, watermark):
           output_path    - 嵌入后保存的文档路径
           watermark_text - 要隐藏的字符串（水印内容）
         """
-        # 1. 转为绝对路径
-        doc_path = os.path.abspath(doc_path)
-        output_path = os.path.abspath(output_path)
+        # 1. 初始化 COM 库
+        pythoncom.CoInitialize()
 
-        # 2. 把 watermark_text 转为二进制序列（每字符 8 位）
-        binary_data = ''.join(format(ord(c), '08b') for c in watermark_text)
-        total_needed = len(binary_data)  # 需要嵌入的位数
+        try:
+            # 2. 转为绝对路径
+            doc_path = os.path.abspath(doc_path)
+            output_path = os.path.abspath(output_path)
 
-        # 3. 启动 Word 后台打开文档
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
-        doc = word.Documents.Open(doc_path)
+            # 3. 把 watermark_text 转为二进制序列（每字符 8 位）
+            binary_data = ''.join(format(ord(c), '08b') for c in watermark_text)
+            total_needed = len(binary_data)  # 需要嵌入的位数
 
-        # 4. 拿到整个文档的字符集合
-        # full_range = doc.Range(0, 0).GoTo(What=win32com.client.constants.wdGoToLine, Which=win32com.client.constants.wdGoToLast)
-        # 事实上 doc.Range() 就可以代表全文，只是下面我们直接从 doc.Range().Characters 获取
-        chars = doc.Range().Characters
-        total_chars = chars.Count
+            # 4. 启动 Word 后台打开文档
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False
+            doc = word.Documents.Open(doc_path)
 
-        # 5. 如果字符不足，就在文档尾部插入空格以补齐
-        if total_needed > total_chars:
-            extra_needed = total_needed - total_chars
-            # 在文档末尾插入 extra_needed 个空格，使得 Characters.Count 增加
-            doc.Content.InsertAfter(" " * extra_needed)
-            # 重新获取 Characters 集合
+            # 5. 拿到整个文档的字符集合
             chars = doc.Range().Characters
             total_chars = chars.Count
 
-        # 6. 遍历二进制位，把前 total_needed 个字符的 Font.Spacing 设置为 0/1
-        #    注意：Characters 集合是 1-based，下标 i+1 对应二进制的第 i 位
-        for i, bit in enumerate(binary_data):
-            char_range = chars(i + 1)  # 第 i+1 个字符
-            if bit == '0':
-                char_range.Font.Spacing = 0  # 二进制 0 → 间距 0 pt
-            else:
-                char_range.Font.Spacing = 1  # 二进制 1 → 间距 1 pt
+            # 6. 如果字符不足，就在文档尾部插入空格以补齐
+            if total_needed > total_chars:
+                extra_needed = total_needed - total_chars
+                # 在文档末尾插入 extra_needed 个空格，使得 Characters.Count 增加
+                doc.Content.InsertAfter(" " * extra_needed)
+                # 重新获取 Characters 集合
+                chars = doc.Range().Characters
+                total_chars = chars.Count
 
-        # 7. 保存并退出
-        doc.SaveAs(output_path)
-        doc.Close()
-        word.Quit()
-        return output_path
+            # 7. 遍历二进制位，把前 total_needed 个字符的 Font.Spacing 设置为 0/1
+            for i, bit in enumerate(binary_data):
+                char_range = chars(i + 1)  # 第 i+1 个字符
+                if bit == '0':
+                    char_range.Font.Spacing = 0  # 二进制 0 → 间距 0 pt
+                else:
+                    char_range.Font.Spacing = 1  # 二进制 1 → 间距 1 pt
 
-    return embed_watermark_in_char_spacing(input_file,full_path, watermark)
+            # 8. 保存并退出
+            doc.SaveAs(output_path)
+            doc.Close()
+            word.Quit()
+
+            return output_path
+
+        finally:
+            # 9. 释放 COM 资源
+            pythoncom.CoUninitialize()
+
+    return embed_watermark_in_char_spacing(input_file, full_path, watermark)
 
 def extract_doc_space(input_file):
     """DOC格式专用"""
-    import win32com.client
     import pythoncom
+    import win32com.client
     import os
+    
     def extract_watermark_from_char_spacing(doc_path, length=6):
         """
         从之前用 embed_watermark_in_char_spacing 嵌入的数据中提取水印。
@@ -252,45 +259,177 @@ def extract_doc_space(input_file):
         返回：
           提取出的原始字符串
         """
-        # 1. 转为绝对路径，打开 Word 文档
-        doc_path = os.path.abspath(doc_path)
+        # 1. 初始化 COM 库
         pythoncom.CoInitialize()
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
-        doc = word.Documents.Open(doc_path)
 
-        # 2. 需要读取的二进制总位数 = length * 8
-        bits_needed = length * 8
-        chars = doc.Range().Characters
+        try:
+            # 2. 转为绝对路径，打开 Word 文档
+            doc_path = os.path.abspath(doc_path)
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False
+            doc = word.Documents.Open(doc_path)
 
-        # 3. 如果字符数量小于 bits_needed，说明读取不完整，可以抛错或提示
-        if bits_needed > chars.Count:
+            # 3. 需要读取的二进制总位数 = length * 8
+            bits_needed = length * 8
+            chars = doc.Range().Characters
+
+            # 4. 如果字符数量小于 bits_needed，说明读取不完整，可以抛错或提示
+            if bits_needed > chars.Count:
+                doc.Close()
+                word.Quit()
+                raise ValueError(f"文档字符数 ({chars.Count}) 少于水印读取需要的位数 ({bits_needed})，无法提取完整水印。")
+
+            # 5. 逐位读取字符的 Font.Spacing 属性，构建二进制串
+            binary = []
+            for i in range(bits_needed):
+                char_range = chars(i + 1)  # 第 i+1 个字符
+                spacing = char_range.Font.Spacing
+                # 如果 spacing 大于 0（我们嵌入时一律设为 1），则视为 '1'，否则 '0'
+                bit = '1' if spacing and spacing > 0 else '0'
+                binary.append(bit)
+            binary_str = ''.join(binary)
+
+            # 6. 将二进制按照每 8 位拆分并转为字符
+            chars_out = []
+            for i in range(0, len(binary_str), 8):
+                byte = binary_str[i:i + 8]
+                chars_out.append(chr(int(byte, 2)))
+            watermark = ''.join(chars_out)
+
+            print(f"🔍 提取出的水印: {watermark}")
+            return watermark
+
+        finally:
+            # 7. 释放 COM 资源
             doc.Close()
             word.Quit()
-            raise ValueError(f"文档字符数 ({chars.Count}) 少于水印读取需要的位数 ({bits_needed})，无法提取完整水印。")
+            pythoncom.CoUninitialize()
 
-        # 4. 逐位读取字符的 Font.Spacing 属性，Build 二进制串
-        binary = []
-        for i in range(bits_needed):
-            char_range = chars(i + 1)  # 第 i+1 个字符
-            spacing = char_range.Font.Spacing
-            # 如果 spacing 大于 0（我们嵌入时一律设为 1），则视为 '1'，否则 '0'
-            bit = '1' if spacing and spacing > 0 else '0'
-            binary.append(bit)
-        binary_str = ''.join(binary)
-
-        # 5. 将二进制按照每 8 位拆分并转为字符
-        chars_out = []
-        for i in range(0, len(binary_str), 8):
-            byte = binary_str[i:i + 8]
-            chars_out.append(chr(int(byte, 2)))
-        watermark = ''.join(chars_out)
-
-        doc.Close()
-        word.Quit()
-        print(f"🔍 提取出的水印: {watermark}")
-        return watermark
     return extract_watermark_from_char_spacing(input_file, 6)
+
+# # DOC格式
+# def embed_doc_space(input_file, watermark):
+#     """DOC格式专用"""
+#     import win32com.client
+#     import os
+
+#     original_name = os.path.basename(input_file)
+#     name_without_ext = os.path.splitext(original_name)[0]
+#     filename = f"{name_without_ext}_embed.{'doc'}"
+
+#     # 从app.config获取保存路径
+#     embed_dir = get_user_dated_embed_dir('text')
+#     full_path = os.path.join(embed_dir, filename)
+
+#     # 保存文件
+#     def embed_watermark_in_char_spacing(doc_path, output_path, watermark_text):
+#         """
+#         将 watermark_text 以二进制形式嵌入到 doc 文档中：
+#           - 把每个字符的 Font.Spacing 设置为 0 或 1，分别表示二进制 0/1。
+#           - 如果文档中字符数量不够，则自动在末尾插入空格补齐。
+#         参数：
+#           doc_path       - 源 .doc/.docx 文档路径
+#           output_path    - 嵌入后保存的文档路径
+#           watermark_text - 要隐藏的字符串（水印内容）
+#         """
+#         # 1. 转为绝对路径
+#         doc_path = os.path.abspath(doc_path)
+#         output_path = os.path.abspath(output_path)
+
+#         # 2. 把 watermark_text 转为二进制序列（每字符 8 位）
+#         binary_data = ''.join(format(ord(c), '08b') for c in watermark_text)
+#         total_needed = len(binary_data)  # 需要嵌入的位数
+
+#         # 3. 启动 Word 后台打开文档
+#         word = win32com.client.Dispatch("Word.Application")
+#         word.Visible = False
+#         doc = word.Documents.Open(doc_path)
+
+#         # 4. 拿到整个文档的字符集合
+#         # full_range = doc.Range(0, 0).GoTo(What=win32com.client.constants.wdGoToLine, Which=win32com.client.constants.wdGoToLast)
+#         # 事实上 doc.Range() 就可以代表全文，只是下面我们直接从 doc.Range().Characters 获取
+#         chars = doc.Range().Characters
+#         total_chars = chars.Count
+
+#         # 5. 如果字符不足，就在文档尾部插入空格以补齐
+#         if total_needed > total_chars:
+#             extra_needed = total_needed - total_chars
+#             # 在文档末尾插入 extra_needed 个空格，使得 Characters.Count 增加
+#             doc.Content.InsertAfter(" " * extra_needed)
+#             # 重新获取 Characters 集合
+#             chars = doc.Range().Characters
+#             total_chars = chars.Count
+
+#         # 6. 遍历二进制位，把前 total_needed 个字符的 Font.Spacing 设置为 0/1
+#         #    注意：Characters 集合是 1-based，下标 i+1 对应二进制的第 i 位
+#         for i, bit in enumerate(binary_data):
+#             char_range = chars(i + 1)  # 第 i+1 个字符
+#             if bit == '0':
+#                 char_range.Font.Spacing = 0  # 二进制 0 → 间距 0 pt
+#             else:
+#                 char_range.Font.Spacing = 1  # 二进制 1 → 间距 1 pt
+
+#         # 7. 保存并退出
+#         doc.SaveAs(output_path)
+#         doc.Close()
+#         word.Quit()
+#         return output_path
+
+#     return embed_watermark_in_char_spacing(input_file,full_path, watermark)
+
+# def extract_doc_space(input_file):
+#     """DOC格式专用"""
+#     import win32com.client
+#     import pythoncom
+#     import os
+#     def extract_watermark_from_char_spacing(doc_path, length=6):
+#         """
+#         从之前用 embed_watermark_in_char_spacing 嵌入的数据中提取水印。
+#         参数：
+#           doc_path - 含隐藏水印的文档路径
+#           length   - 原始水印的字符长度（例如 "own" → length=3；“owner”→ length=5）
+#         返回：
+#           提取出的原始字符串
+#         """
+#         # 1. 转为绝对路径，打开 Word 文档
+#         doc_path = os.path.abspath(doc_path)
+#         pythoncom.CoInitialize()
+#         word = win32com.client.Dispatch("Word.Application")
+#         word.Visible = False
+#         doc = word.Documents.Open(doc_path)
+
+#         # 2. 需要读取的二进制总位数 = length * 8
+#         bits_needed = length * 8
+#         chars = doc.Range().Characters
+
+#         # 3. 如果字符数量小于 bits_needed，说明读取不完整，可以抛错或提示
+#         if bits_needed > chars.Count:
+#             doc.Close()
+#             word.Quit()
+#             raise ValueError(f"文档字符数 ({chars.Count}) 少于水印读取需要的位数 ({bits_needed})，无法提取完整水印。")
+
+#         # 4. 逐位读取字符的 Font.Spacing 属性，Build 二进制串
+#         binary = []
+#         for i in range(bits_needed):
+#             char_range = chars(i + 1)  # 第 i+1 个字符
+#             spacing = char_range.Font.Spacing
+#             # 如果 spacing 大于 0（我们嵌入时一律设为 1），则视为 '1'，否则 '0'
+#             bit = '1' if spacing and spacing > 0 else '0'
+#             binary.append(bit)
+#         binary_str = ''.join(binary)
+
+#         # 5. 将二进制按照每 8 位拆分并转为字符
+#         chars_out = []
+#         for i in range(0, len(binary_str), 8):
+#             byte = binary_str[i:i + 8]
+#             chars_out.append(chr(int(byte, 2)))
+#         watermark = ''.join(chars_out)
+
+#         doc.Close()
+#         word.Quit()
+#         print(f"🔍 提取出的水印: {watermark}")
+#         return watermark
+#     return extract_watermark_from_char_spacing(input_file, 6)
 
 
 def embed_docx_space(input_file, watermark):

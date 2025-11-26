@@ -730,6 +730,13 @@
         
         // 添加清除所有结果按钮（如果还没有的话）
         addClearAllClientResultsButton();
+
+        // 每次向页面添加客户端结果后，同步保存到 sessionStorage
+        try {
+            updateClientResultsStorage();
+        } catch (e) {
+            console.warn('保存客户端结果到 sessionStorage 失败', e);
+        }
     }
 
     // 事件委托，避免内联表达式导致的语法检查问题
@@ -770,12 +777,12 @@
                 <div class="center-modal success-modal">
                     <div class="modal-head">
                         <strong><i class="glyphicon glyphicon-ok-sign"></i> 提取成功</strong>
-                        <button type="button" class="close" aria-label="Close" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();"><span aria-hidden="true">&times;</span></button>
+                        <button type="button" class="close" aria-label="Close" onclick="saveClientResultsAndReload();"><span aria-hidden="true">&times;</span></button>
                     </div>
                     <div class="modal-body">${message || '成功提取水印！'}</div>
                     ${detailMessage ? `<div class="modal-footer">${detailMessage}</div>` : '<div class="modal-footer">详细信息请查看页面底部的提取结果</div>'}
                     <div class="modal-actions">
-                        <button type="button" class="btn btn-success" onclick="document.getElementById('centerModalBackdrop').remove(); location.reload();">我知道了</button>
+                        <button type="button" class="btn btn-success" onclick="saveClientResultsAndReload();">我知道了</button>
                     </div>
                 </div>`;
         } else {
@@ -807,8 +814,15 @@
                 // 检查是否还有其他结果，如果没有则隐藏整个区域
                 var list = document.getElementById('clientResultList');
                 if (list && list.children.length === 0) {
-                    document.getElementById('clientResultsSection').style.display = 'none';
-                    document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                    var sec = document.getElementById('clientResultsSection');
+                    if (sec) sec.style.display = 'none';
+                    var clearContainer = document.getElementById('clearAllClientResultsContainer');
+                    if (clearContainer) clearContainer.style.display = 'none';
+                    // 同步更新 sessionStorage
+                    sessionStorage.removeItem('clientResultListHTML_video');
+                } else {
+                    // 更新 sessionStorage 保持一致
+                    try { updateClientResultsStorage(); } catch (e) { console.warn(e); }
                 }
             }, 300);
         }
@@ -826,8 +840,12 @@
             list.style.opacity = '0';
             setTimeout(function() {
                 list.innerHTML = '';
-                document.getElementById('clientResultsSection').style.display = 'none';
-                document.getElementById('clearAllClientResultsContainer').style.display = 'none';
+                var sec = document.getElementById('clientResultsSection');
+                if (sec) sec.style.display = 'none';
+                var clearContainer = document.getElementById('clearAllClientResultsContainer');
+                if (clearContainer) clearContainer.style.display = 'none';
+                // 清空 sessionStorage
+                sessionStorage.removeItem('clientResultListHTML_video');
                 list.style.opacity = '1'; // 重置透明度
             }, 300);
         }
@@ -841,6 +859,56 @@
         if (container && list && list.children.length > 0) {
             container.style.display = 'block';
         }
+    }
+
+    // 保存当前 clientResultList 到 sessionStorage（保持提取结果在刷新后仍可见）
+    function updateClientResultsStorage() {
+        var list = document.getElementById('clientResultList');
+        if (!list) return;
+        var html = list.innerHTML || '';
+        if (html.trim() === '') {
+            sessionStorage.removeItem('clientResultListHTML_video');
+        } else {
+            sessionStorage.setItem('clientResultListHTML_video', html);
+        }
+    }
+
+    // 点击"我知道了"时先保存提取结果，然后刷新页面
+    function saveClientResultsAndReload() {
+        var backdrop = document.getElementById('centerModalBackdrop');
+        if (backdrop) backdrop.remove();
+        try {
+            updateClientResultsStorage();
+        } catch (e) {
+            console.warn('保存客户端结果失败', e);
+        }
+        // 强制刷新页面
+        location.reload();
+    }
+
+    // 页面加载时尝试从 sessionStorage 恢复已保存的客户端提取结果
+    function restoreClientResultsFromStorage() {
+        try {
+            var stored = sessionStorage.getItem('clientResultListHTML_video');
+            if (!stored) return;
+            // 确保容器存在
+            ensureClientResultsSection();
+            var list = document.getElementById('clientResultList');
+            if (!list) return;
+            list.innerHTML = stored;
+            var section = document.getElementById('clientResultsSection');
+            if (section) section.style.display = '';
+            addClearAllClientResultsButton();
+        } catch (e) {
+            console.warn('恢复客户端结果失败', e);
+        }
+    }
+
+    // 页面加载时恢复之前保存的客户端结果（如果有的话）
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', restoreClientResultsFromStorage);
+    } else {
+        restoreClientResultsFromStorage();
     }
 
     // 提取选中文件的水印

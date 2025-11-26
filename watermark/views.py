@@ -2201,9 +2201,10 @@ def text_add_watermark():
                          watermarked_pagination=watermarked_pagination,
                          embed_result=embed_result)
 
+
 @app.route('/text/extract_watermark', methods=['GET', 'POST'])
 @login_required
-def text_extract_watermark():
+def text_extract_watermark(): 
     if request.method == 'POST':
         # 处理批量提取
         selected_file_ids = request.form.getlist('selected_files')
@@ -2220,7 +2221,7 @@ def text_extract_watermark():
                         file_record.watermarked_path,
                         None,
                         'extract',
-                        file_id # 传递文件ID
+                        file_id  # 传递文件ID
                     )
                     
                     if not error:
@@ -2229,9 +2230,9 @@ def text_extract_watermark():
                 except Exception as e:
                     continue
             
-            # 将结果存储到session中
+            # 将结果存储到 session 中
             session['extracted_watermarks'] = results
-            return redirect(url_for('text_extract_watermark'))
+            return redirect(url_for('text_extract_watermark'))  # 刷新页面，显示提取结果
         
         # 处理单个文件上传提取
         if 'file' not in request.files:
@@ -2270,8 +2271,9 @@ def text_extract_watermark():
     )
     
     # 获取之前的提取结果
-    extracted_watermarks = session.pop('extracted_watermarks', {})
+    extracted_watermarks = session.get('extracted_watermarks', {})
     
+    # 渲染模板，传递未处理文件和已添加水印文件，以及提取的水印结果
     return render_template('text/extract_watermark.html',
                          unwatermarked_pagination=unwatermarked_pagination,
                          watermarked_pagination=watermarked_pagination,
