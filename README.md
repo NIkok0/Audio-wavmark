@@ -68,7 +68,7 @@
 ### 运行与基础设施
 
 - **数据库**: MySQL（默认 DSN 可在 `.flaskenv`/环境变量中覆盖）
-- **迁移**: `flask initdb` 初始化，`flask db migrate/upgrade` 迁移
+- **迁移**: `flask initdb --drop` 初始化，`flask db migrate/upgrade` 迁移
 - **静态资源**: 本地托管 + CDN（Chart.js）
 
 ## 安装和运行
