@@ -17,6 +17,9 @@
 - 提取水印：从已加水印文件中提取水印信息
 - 批量处理：批量上传、批量添加、批量提取
 - 文件管理：上传/下载/删除，支持批量删除（添加页与提取页均支持）
+- 权限管理：支持超级管理员/管理员/普通会员角色，可精细控制嵌入/提取权限及账号状态
+- 用户设置：支持自定义文件保留天数（过期自动清理），个人资料管理
+- 问题反馈：内置问题反馈系统，支持多种反馈类型与表单验证
 - 分页展示：上传/添加/提取页面、首页个人列表均支持分页
 - 统一提示：前端采用统一的通知样式（替代原生 alert），并修复了验证失败后错误进入“处理中”的问题
 - 可视反馈：添加水印表单的输入框支持出错高亮/抖动/行内错误提示
@@ -51,7 +54,7 @@
 - **Flask 3.x**: Web 框架
 - **Flask-SQLAlchemy 3.x**: ORM + 会话管理
 - **Flask-Migrate/Alembic**: 数据库迁移
-- **Flask-Login**: 认证与会话登录
+- **Flask-Login**: 认证与会话登录（集成 RBAC 权限控制）
 - **Flask-WTF / WTForms**: 表单与校验（含 email-validator）
 - **PyMySQL**: MySQL 驱动（默认连接 MySQL，可切换 SQLite）
 - 多媒体处理：
@@ -169,6 +172,14 @@ flask run
 
 访问 http://localhost:5000 开始使用系统。
 
+8. **Windows Server 兼容性检查（可选）**
+
+如果部署在 Windows Server 环境下，建议运行兼容性检查脚本以确保系统功能正常：
+
+```bash
+python check_windows_compatibility.py
+```
+
 ## 使用指南
 
 ### 基本操作流程
@@ -252,19 +263,17 @@ flask run
 
 ```
 learn_flask_the_easy_way/
-├── watermark/                        # 主应用
-│   ├── __init__.py                   # 应用与扩展初始化（DB/Login/Migrate/目录配置）
-│   ├── views.py                      # 路由与业务
-│   ├── models.py                     # ORM 模型（User/Group/File）
-│   ├── commands.py                   # Flask CLI 命令（initdb/create_admin）
-│   ├── forms/                        # 表单
-│   │   ├── login_form.py
-│   │   ├── register_form.py
-│   │   └── watermark_form.py
+├── wate├── watermark_form.py
+│   │   └── permission_form.py        # 权限管理表单
 │   ├── templates/                    # 模板
 │   │   ├── base.html                 # 全局导航/侧栏/容器
 │   │   ├── index.html                # 首页（统计与可视化）
+│   │   ├── feedback.html             # 问题反馈页面
 │   │   ├── register.html / signin.html
+│   │   ├── admin/                    # 管理员页面
+│   │   │   └── permission_management.html
+│   │   ├── profile/                  # 用户个人中心
+│   │   │   └── retention.html
 │   │   ├── image/ (upload/add/extract/process)
 │   │   ├── audio/ (upload/add/extract/process)
 │   │   ├── video/ (upload/add/extract/process)
@@ -273,14 +282,25 @@ learn_flask_the_easy_way/
 │   │   ├── css/ (custom.css, bootstrap.min.css, 等)
 │   │   └── js/  (common.js, bootstrap.bundle.min.js, 等)
 │   └── utils/                        # 工具与算法封装
-│       ├── configs                   #视频水印算法模型配置文件夹
-│       ├── videoseal                 #视频水印算法模型使用工具文件夹
-│       ├── src                       #音频水印算法模型使用工具文件夹
+│       ├── configs                   # 视频水印算法模型配置文件夹
+│       ├── videoseal                 # 视频水印算法模型使用工具文件夹
+│       ├── src                       # 音频水印算法模型使用工具文件夹
 │       ├── algorithm_selector.py     # 按文件选择算法/提取算法
 │       ├── file_config.py            # 文件类型/大小/算法配置与工具
 │       ├── path_utils.py             # 用户/日期目录、临时路径、中文路径兼容与清理
+│       ├── windows_compat.py         # Windows 兼容性工具
 │       ├── watermark_image.py        # 图像水印
 │       ├── watermark_audio.py        # 音频水印
+│       ├── watermark_video.py        # 视频水印
+│       └── watermark_text.py         # 文本水印
+├── migrations/                       # 数据库迁移
+├── instance/                         # 运行期生成文件（uploads/embeds/extracts/temp/logs）
+├── requirements.txt                  # 依赖清单（固定版本）
+├── README.md                         # 项目说明
+├── FEEDBACK_SYSTEM.md                # 反馈系统说明
+├── ckpts                             # 视频水印算法模型文件
+├── clean_file.py                     # 负责定时清理文件
+├── check_windows_compatibility.py    # Windows 兼容性检查脚本
 │       ├── watermark_video.py        # 视频水印
 │       └── watermark_text.py         # 文本水印
 ├── migrations/                       # 数据库迁移
