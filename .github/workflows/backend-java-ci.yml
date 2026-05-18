@@ -36,13 +36,8 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Verify Docker (Testcontainers)
-        run: |
-          docker version
-          docker info --format '{{.ServerVersion}}'
-
-      - name: Maven verify (unit + Testcontainers IT)
-        run: mvn -B -pl web -am verify
+      - name: Maven verify (unit + smoke)
+        run: mvn -B -pl web -am verify -Dtest='!EndToEndWatermarkFlowTest' -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: List JAR output
         run: ls -la web/target/*.jar

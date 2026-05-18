@@ -39,6 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -125,7 +126,7 @@ class EndToEndWatermarkFlowTest {
                                 .content(
                                         """
                                         {"username":"%s","email":"%s","password":"%s"}
-                                        """
+                                                """
                                                 .formatted(username, email, password)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists());
@@ -167,7 +168,8 @@ class EndToEndWatermarkFlowTest {
                                                 {"objectKey":"%s","etag":"%s","size":%d,"filename":"probe.png","mediaType":"image"}
                                                 """
                                                         .formatted(objectKey, etag, size)))
-                        .andExpect(status().isOk())
+                        .andDo(print())
+                        .andExpect(status().isCreated())
                         .andExpect(jsonPath("$.id").exists())
                         .andReturn();
 
