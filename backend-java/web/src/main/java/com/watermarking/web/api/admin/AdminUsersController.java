@@ -1,5 +1,6 @@
 package com.watermarking.web.api.admin;
 
+import com.watermarking.application.admin.AdminBatchDeleteUsersRequest;
 import com.watermarking.application.admin.AdminCreateUserRequest;
 import com.watermarking.application.admin.AdminPatchUserRequest;
 import com.watermarking.application.admin.AdminUserResponse;
@@ -16,6 +17,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -70,6 +72,20 @@ public class AdminUsersController {
     public AdminUserResponse patch(@PathVariable("id") int id, @Valid @RequestBody AdminPatchUserRequest body) {
         User viewer = currentUser();
         return adminUserService.patch(viewer, id, body);
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除用户", description = "仅超级管理员可删除，且不能删除当前登录用户。")
+    public ResponseEntity<Void> delete(@PathVariable("id") int id) {
+        adminUserService.delete(currentUser(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/batch-delete")
+    @Operation(summary = "批量删除用户", description = "仅超级管理员可批量删除用户。")
+    public ResponseEntity<Void> batchDelete(@Valid @RequestBody AdminBatchDeleteUsersRequest body) {
+        adminUserService.batchDelete(currentUser(), body.getUserIds());
+        return ResponseEntity.noContent().build();
     }
 
     private static User currentUser() {

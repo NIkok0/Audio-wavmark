@@ -69,6 +69,11 @@ public class SecurityConfig {
                                 new AntPathRequestMatcher("/api/v1/jobs/watermark", "POST"),
                                 new AntPathRequestMatcher("/api/v1/admin/users", "POST"),
                                 new AntPathRequestMatcher("/api/v1/admin/users/*", "PATCH"),
+                                new AntPathRequestMatcher("/api/v1/admin/users/*", "DELETE"),
+                                new AntPathRequestMatcher("/api/v1/admin/users/batch-delete", "POST"),
+                                new AntPathRequestMatcher("/api/v1/admin/groups", "POST"),
+                                new AntPathRequestMatcher("/api/v1/admin/groups/*", "PATCH"),
+                                new AntPathRequestMatcher("/api/v1/admin/groups/*", "DELETE"),
                                 new AntPathRequestMatcher("/api/v1/admin/users/*/groups/*", "POST"),
                                 new AntPathRequestMatcher("/api/v1/admin/users/*/groups/*", "DELETE"),
                                 new AntPathRequestMatcher("/api/v1/users/me/retention", "PATCH")))

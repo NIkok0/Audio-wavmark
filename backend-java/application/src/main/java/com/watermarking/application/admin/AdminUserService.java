@@ -4,6 +4,7 @@ import com.watermarking.application.auth.RegistrationConflictException;
 import com.watermarking.application.auth.RegistrationConflictException.ConflictField;
 import com.watermarking.domain.model.Group;
 import com.watermarking.domain.model.User;
+import com.watermarking.infrastructure.persistence.FileRepository;
 import com.watermarking.infrastructure.persistence.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,10 +22,12 @@ import java.util.stream.Collectors;
 public class AdminUserService {
 
     private final UserRepository userRepository;
+    private final FileRepository fileRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public AdminUserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AdminUserService(UserRepository userRepository, FileRepository fileRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.fileRepository = fileRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -135,9 +138,42 @@ public class AdminUserService {
         return AdminUserResponse.fromEntity(userRepository.findWithGroupsById(saved.getId()).orElse(saved));
     }
 
+    @Transactional
+    public void delete(User viewer, int targetId) {
+        User v = userRepository.findWithGroupsById(viewer.getId()).orElse(viewer);
+        requireSuperAdmin(v);
+        if (v.getId().equals(targetId)) {
+            throw new AdminAccessDeniedException("不能删除当前登录用户");
+        }
+        User target = userRepository
+                .findWithGroupsById(targetId)
+                .orElseThrow(() -> new AdminUserNotFoundException("用户不存在"));
+        fileRepository.findByUploader_IdOrderByCreatedAtDesc(target.getId(), org.springframework.data.domain.Pageable.unpaged())
+                .forEach(fileRepository::delete);
+        userRepository.delete(target);
+    }
+
+    @Transactional
+    public void batchDelete(User viewer, java.util.List<Integer> targetIds) {
+        User v = userRepository.findWithGroupsById(viewer.getId()).orElse(viewer);
+        requireSuperAdmin(v);
+        if (targetIds == null || targetIds.isEmpty()) {
+            throw new IllegalArgumentException("请选择要删除的用户");
+        }
+        for (Integer id : targetIds.stream().filter(java.util.Objects::nonNull).distinct().toList()) {
+            delete(v, id);
+        }
+    }
+
     private static void requireManageGroups(User viewer) {
         if (!viewer.canManageGroups()) {
             throw new AdminAccessDeniedException("需要管理员权限");
+        }
+    }
+
+    private static void requireSuperAdmin(User viewer) {
+        if (!viewer.isSuperAdmin()) {
+            throw new AdminAccessDeniedException("需要超级管理员权限");
         }
     }
 
