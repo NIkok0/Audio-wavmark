@@ -55,15 +55,24 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
         run: |
           set -euo pipefail
           test -n "${DEPLOY_HOST}" || { echo "Missing secret DEPLOY_HOST" >&2; exit 1; }
           test -n "${DEPLOY_USER}" || { echo "Missing secret DEPLOY_USER" >&2; exit 1; }
-          test -n "${DEPLOY_SSH_KEY}" || { echo "Missing secret DEPLOY_SSH_KEY" >&2; exit 1; }
+          if [[ -z "${DEPLOY_SSH_KEY_B64}" && -z "${DEPLOY_SSH_KEY}" ]]; then
+            echo "Missing secret DEPLOY_SSH_KEY_B64 or DEPLOY_SSH_KEY" >&2
+            exit 1
+          fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/watermark_deploy_key
+          if [[ -n "${DEPLOY_SSH_KEY_B64}" ]]; then
+            printf '%s' "${DEPLOY_SSH_KEY_B64}" | base64 -d > ~/.ssh/watermark_deploy_key
+          else
+            printf '%s\n' "${DEPLOY_SSH_KEY}" | tr -d '\r' > ~/.ssh/watermark_deploy_key
+          fi
           chmod 600 ~/.ssh/watermark_deploy_key
+          ssh-keygen -y -f ~/.ssh/watermark_deploy_key > /dev/null
           ssh-keyscan -p "${DEPLOY_PORT}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
 
       - name: Upload JAR
