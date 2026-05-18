@@ -1,22 +1,29 @@
 import logging
 import os
+from importlib import import_module
 from watermark.utils.file_config import (
     get_implemented_algorithms, 
     get_default_algorithm,
     get_file_type_by_extension
 )
-from watermark.utils import watermark_image, watermark_video, watermark_audio, watermark_text
-from watermark.utils.watermark_video import text_to_6char_hash
 class AlgorithmSelector:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        # 媒体类型到模块的映射
-        self.modules = {
-            "image": watermark_image,
-            "video": watermark_video,
-            "audio": watermark_audio,
-            "text": watermark_text
+        # 媒体类型到模块路径的映射。按需加载，避免 Worker 启动时强制导入视频/音频重依赖。
+        self.module_paths = {
+            "image": "watermark.utils.watermark_image",
+            "video": "watermark.utils.watermark_video",
+            "audio": "watermark.utils.watermark_audio",
+            "text": "watermark.utils.watermark_text",
         }
+        self.modules = {}
+
+    def _get_module(self, file_type):
+        if file_type not in self.module_paths:
+            raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.module_paths.keys())}")
+        if file_type not in self.modules:
+            self.modules[file_type] = import_module(self.module_paths[file_type])
+        return self.modules[file_type]
     
     def select_algorithm(self, file_path, watermark_text,random_seed=None):
         """智能选择算法进行水印嵌入"""
@@ -30,8 +37,8 @@ class AlgorithmSelector:
             raise ValueError(f"不支持的文件后缀: {extension}")
         print(file_type)
         # 验证文件类型
-        if file_type not in self.modules:
-            raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.modules.keys())}")
+        if file_type not in self.module_paths:
+            raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.module_paths.keys())}")
         
         # 获取已实现的算法列表（按优先级排序）
         implemented_algorithms = get_implemented_algorithms(extension)
@@ -93,11 +100,11 @@ class AlgorithmSelector:
             raise ValueError(f"不支持的文件后缀: {extension}")
 
         # 验证文件类型
-        if file_type not in self.modules:
-            raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.modules.keys())}")
+        if file_type not in self.module_paths:
+            raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.module_paths.keys())}")
 
         # 获取对应的模块
-        module = self.modules[file_type]
+        module = self._get_module(file_type)
 
         # 动态获取embed函数并调用
         embed_func = getattr(module, "embed")
@@ -117,10 +124,10 @@ class AlgorithmSelector:
         if not file_type:
             raise ValueError(f"不支持的文件后缀: {extension}")
         # 1. 验证文件类型
-        if file_type not in self.modules:
+        if file_type not in self.module_paths:
             raise ValueError(f"不支持的文件类型: {file_type}, 支持的类型: {list(self.modules.keys())}")
         # 2. 获取对应的模块
-        module = self.modules[file_type]
+        module = self._get_module(file_type)
         # 3. 动态获取extract函数并调用
         extract_func = getattr(module, "extract")
         if watermark_seed:
@@ -143,7 +150,7 @@ class AlgorithmSelector:
         if not file_type:
             raise ValueError(f"不支持的文件后缀: {extension}")
         
-        if file_type not in self.modules:
+        if file_type not in self.module_paths:
             raise ValueError(f"不支持的文件类型: {file_type}")
         
         # 获取该文件类型的所有已实现算法
@@ -160,7 +167,7 @@ class AlgorithmSelector:
             algorithms_to_try = implemented_algorithms
         
         # 获取对应的模块
-        module = self.modules[file_type]
+        module = self._get_module(file_type)
         extract_func = getattr(module, "extract")
         
         # 收集每个算法的尝试结果

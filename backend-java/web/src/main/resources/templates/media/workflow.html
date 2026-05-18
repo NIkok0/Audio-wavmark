@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title th:text="${mediaLabel} + ' — ' + ${stepTitle} + ' - 数字水印系统'">媒体处理</title>
+    <th:block th:replace="~{base :: commonHead}"/>
+</head>
+<body>
+<nav th:replace="~{base :: navbar}"></nav>
+<aside th:replace="~{base :: sidebar}"></aside>
+
+<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/}">首页</a></li>
+            <li class="breadcrumb-item"><a th:href="${processUrl}">[[${mediaLabel}]]</a></li>
+            <li class="breadcrumb-item active" th:text="${stepTitle}">步骤</li>
+        </ol>
+    </nav>
+
+    <ul class="nav nav-pills mb-4 flex-wrap gap-1">
+        <li class="nav-item"><a class="nav-link" th:href="${uploadUrl}" th:classappend="${stepKey == 'upload'} ? ' active'">上传</a></li>
+        <li class="nav-item"><a class="nav-link" th:href="${addUrl}" th:classappend="${stepKey == 'add'} ? ' active'">嵌入水印</a></li>
+        <li class="nav-item"><a class="nav-link" th:href="${extractUrl}" th:classappend="${stepKey == 'extract'} ? ' active'">提取水印</a></li>
+        <li class="nav-item"><a class="nav-link" th:href="${processUrl}" th:classappend="${stepKey == 'process'} ? ' active'">流程</a></li>
+    </ul>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h1 class="h4 mb-3" th:text="${mediaLabel} + ' — ' + ${stepTitle}">标题</h1>
+            <p class="text-secondary mb-2">此页为 Thymeleaf 壳层；实际上传、STS、水印任务等请调用既有 REST 接口：</p>
+            <ul class="small">
+                <li><code>POST /api/v1/storage/sts</code>、<code>POST /api/v1/files/complete</code>（对象存储直传）</li>
+                <li><code>POST /api/v1/files</code>（本机 multipart）</li>
+                <li><code>POST /api/v1/jobs/watermark</code>（入队）</li>
+                <li><code>GET /api/v1/files</code>、<code>GET /api/v1/files/{id}</code></li>
+            </ul>
+            <p class="small text-muted mb-0">后续可在此页接入与 Flask 相同的 Dropzone / 表单，并继续通过 fetch 调 API。</p>
+        </div>
+    </div>
+</main>
+
+<th:block th:replace="~{base :: bootstrapJs}"/>
+</body>
+</html>

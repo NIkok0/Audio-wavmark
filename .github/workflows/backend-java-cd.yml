@@ -1,0 +1,88 @@
+name: backend-java CD
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-java-cd-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: Build and deploy Java API
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_HEALTH_URL: ${{ secrets.DEPLOY_HEALTH_URL || 'https://api.loadsadar.asia/actuator/health' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Maven verify
+        working-directory: backend-java
+        run: mvn -B -pl web -am verify
+
+      - name: Locate deployable JAR
+        id: jar
+        working-directory: backend-java
+        run: |
+          set -euo pipefail
+          jar_path="$(find web/target -maxdepth 1 -type f -name 'web-*.jar' ! -name '*sources.jar' ! -name '*javadoc.jar' | sort | head -n 1)"
+          if [[ -z "${jar_path}" ]]; then
+            echo "No deployable JAR found under backend-java/web/target" >&2
+            exit 1
+          fi
+          echo "path=backend-java/${jar_path}" >> "$GITHUB_OUTPUT"
+          ls -lh "${jar_path}"
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${DEPLOY_HOST}" || { echo "Missing secret DEPLOY_HOST" >&2; exit 1; }
+          test -n "${DEPLOY_USER}" || { echo "Missing secret DEPLOY_USER" >&2; exit 1; }
+          test -n "${DEPLOY_SSH_KEY}" || { echo "Missing secret DEPLOY_SSH_KEY" >&2; exit 1; }
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/watermark_deploy_key
+          chmod 600 ~/.ssh/watermark_deploy_key
+          ssh-keyscan -p "${DEPLOY_PORT}" -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Upload JAR
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          remote_jar="/tmp/watermark-api-${GITHUB_SHA}.jar"
+          echo "remote_jar=${remote_jar}" >> "$GITHUB_ENV"
+          scp -i ~/.ssh/watermark_deploy_key -P "${DEPLOY_PORT}" \
+            "${{ steps.jar.outputs.path }}" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_jar}"
+
+      - name: Deploy and health check
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/watermark_deploy_key -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "sudo /usr/local/sbin/watermark-api-deploy '${remote_jar}' '${GITHUB_SHA}' '${DEPLOY_HEALTH_URL}'"

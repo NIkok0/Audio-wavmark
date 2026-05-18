@@ -1,0 +1,27 @@
+# 安装示例（Ubuntu）：
+#   sudo cp deploy/systemd/watermark-api.service.example /etc/systemd/system/watermark-api.service
+#   sudo nano /etc/systemd/system/watermark-api.service   # 核对 User、WorkingDirectory、EnvironmentFile
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now watermark-api
+#
+# 需事先：mvn -pl web -am package -DskipTests
+# 将 web/target/*.jar 复制为 /opt/watermark-api/app.jar（与下面 ExecStart 一致）。
+
+[Unit]
+Description=Watermark Java API (Spring Boot)
+After=network.target mysql.service redis.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/watermark-api
+# 将密钥放在独立文件，权限 chmod 600
+EnvironmentFile=-/opt/watermark-api/watermark-api.env
+ExecStart=/usr/bin/java -XX:+UseContainerSupport -jar /opt/watermark-api/app.jar
+Restart=on-failure
+RestartSec=10
+# 安全加固：禁止过高权限（按实际用户调整）
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

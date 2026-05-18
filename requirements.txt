@@ -1,40 +1,25 @@
 # Python version requirement: == 3.9.23 only
 # This project requires Python 3.9.23 (exact version)
 # Install with: pip install -r requirements.txt
+#
+# Phase 3：已移除 Flask 栈；保留 Worker（Redis Stream）+ 算法 utils 依赖。
 
-# Flask and extensions
-Flask==3.0.2
-Flask-SQLAlchemy==3.1.1
-Flask-Migrate==4.0.5
-Flask-Login==0.6.3
-Flask-Bootstrap==3.3.7.1
-Flask-Dropzone==2.0.0
-Flask-WTF==1.2.1
+# Copilot Agent (Phase 3 orchestration / safety_gate / checkpoint)
+-r copilot-agent/requirements.txt
 
-# Database
+# Database & ORM（无 Flask-SQLAlchemy）
 PyMySQL==1.1.0
-alembic==1.13.1
+SQLAlchemy==2.0.36
+redis==5.0.1
 cryptography==43.0.1
-# Forms and Validation
-WTForms==3.1.2
-email-validator==2.1.0.post1
-
-# Development and Testing
-python-dotenv==1.1.1
-pytest==7.4.4
-pytest-flask==1.3.0
-
-# Security
-Werkzeug==3.0.3
-itsdangerous==2.2.0
 
 # Utilities
+python-dotenv==1.1.1
+pytest==7.4.4
 click==8.1.7
 requests==2.32.3
 greenlet==3.0.1
-Mako==1.2.3
 MarkupSafe==2.1.3
-Jinja2==3.1.4
 joblib==1.4.2
 pandas==2.2.2
 matplotlib==3.9.2
@@ -45,7 +30,7 @@ xlutils==2.0.0
 xlwt==1.3.0
 lxml==5.3.1
 python-docx==0.8.11
-pywin32==305
+pywin32==305 ; sys_platform == "win32"
 PyMuPDF==1.23.3
 openpyxl==3.1.2
 
@@ -76,7 +61,6 @@ soundfile==0.13.1
 pydub==0.25.1
 scipy==1.11.2
 
-
 # Video Processing
 opencv-python==4.11.0.86
 imageio==2.33.1
@@ -85,3 +69,6 @@ ffmpeg-python==0.2.0
 av==15.1.0
 pycocotools==2.0.10
 decord==0.6.0
+
+# Object storage (Worker S3/COS)
+boto3==1.34.131

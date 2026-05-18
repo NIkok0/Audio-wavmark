@@ -2,7 +2,7 @@
 import os
 
 # Third-party imports
-from flask import current_app
+from watermark.runtime_paths import get_media_folders
 from watermark.utils.path_utils import get_user_dated_embed_dir
 
 
@@ -180,7 +180,7 @@ def embed_doc_space(input_file, watermark):
     filename = f"{name_without_ext}_embed.{'doc'}"
 
     # 从app.config获取保存路径
-    embed_dir = current_app.config['MEDIA_FOLDERS']['text']['embed']
+    embed_dir = get_media_folders()["text"]["embed"]
     full_path = os.path.join(embed_dir, filename)
 
     def embed_watermark_in_char_spacing(doc_path, output_path, watermark_text):

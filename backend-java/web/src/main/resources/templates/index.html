@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>首页 - 数字水印系统</title>
+    <th:block th:replace="~{base :: commonHead}"/>
+</head>
+<body class="bg-light">
+<nav th:replace="~{base :: navbar}"></nav>
+<aside th:replace="~{base :: sidebar}"></aside>
+
+<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4">
+    <div class="page-header rounded-3 p-4 mb-4 text-white"
+         style="background: linear-gradient(90deg,#6366f1 0%,#06b6d4 100%);">
+        <h1 class="h3 mb-1">数字水印系统</h1>
+        <p class="mb-0 opacity-90">安全、可靠的数字内容保护方案</p>
+    </div>
+
+    <div class="row g-3 mb-4" id="global-cards">
+        <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">全站文件</div><div class="fs-3 fw-bold" id="g-total">—</div></div></div></div>
+        <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">全站存储</div><div class="fs-3 fw-bold" id="g-size">—</div></div></div></div>
+        <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">已加水印</div><div class="fs-3 fw-bold" id="g-wm">—</div></div></div></div>
+        <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">未加水印</div><div class="fs-3 fw-bold" id="g-raw">—</div></div></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">全站 · 媒体类型分布</div>
+                <div class="card-body"><canvas id="chartGlobalTypes" height="220"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold">全站 · 最近 14 天上传趋势</div>
+                <div class="card-body"><canvas id="chartGlobalSeries" height="220"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div sec:authorize="isAuthenticated()" class="d-none" id="user-dashboard">
+        <h2 class="h5 mb-3">我的数据</h2>
+        <div class="row g-3 mb-4">
+            <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">我的文件</div><div class="fs-3 fw-bold" id="u-total">—</div></div></div></div>
+            <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">我的存储</div><div class="fs-3 fw-bold" id="u-size">—</div></div></div></div>
+            <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">已加水印</div><div class="fs-3 fw-bold" id="u-wm">—</div></div></div></div>
+            <div class="col-md-3"><div class="card h-100 border-0 shadow-sm"><div class="card-body"><div class="text-muted small">未加水印</div><div class="fs-3 fw-bold" id="u-raw">—</div></div></div></div>
+        </div>
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">我的 · 媒体类型分布</div>
+                    <div class="card-body"><canvas id="chartUserTypes" height="220"></canvas></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header fw-semibold">我的 · 最近 14 天上传趋势</div>
+                    <div class="card-body"><canvas id="chartUserSeries" height="220"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-secondary" sec:authorize="!isAuthenticated()">
+        <a th:href="@{/signin}" class="alert-link">登录</a> 后可查看个人统计与媒体处理菜单。
+    </div>
+</main>
+
+<th:block th:replace="~{base :: bootstrapJs}"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+    (function () {
+        function pie(ctx, labels, data) {
+            return new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{data: data, backgroundColor: ['#6366f1', '#06b6d4', '#f59e0b', '#22c55e']}]
+                },
+                options: {plugins: {legend: {position: 'bottom'}}, maintainAspectRatio: false}
+            });
+        }
+        function line(ctx, labels, data) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '上传数',
+                        data: data,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99,102,241,.15)',
+                        fill: true,
+                        tension: 0.25
+                    }]
+                },
+                options: {plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true}}, maintainAspectRatio: false}
+            });
+        }
+        document.addEventListener('DOMContentLoaded', async function () {
+            const res = await fetch('/api/v1/stats/dashboard', {credentials: 'same-origin'});
+            if (!res.ok) return;
+            const d = await res.json();
+            const g = d.global;
+            document.getElementById('g-total').textContent = g.totalFiles;
+            document.getElementById('g-size').textContent = g.totalSizeHuman;
+            document.getElementById('g-wm').textContent = g.watermarkedCount;
+            document.getElementById('g-raw').textContent = g.nonWatermarkedCount;
+            pie(document.getElementById('chartGlobalTypes'), g.typeLabels, g.typeValues);
+            line(document.getElementById('chartGlobalSeries'), g.timeseriesLabels, g.timeseriesCounts);
+            if (d.user) {
+                const u = d.user;
+                const ud = document.getElementById('user-dashboard');
+                ud.classList.remove('d-none');
+                document.getElementById('u-total').textContent = u.total;
+                document.getElementById('u-size').textContent = u.totalSizeHuman;
+                document.getElementById('u-wm').textContent = u.watermarked;
+                document.getElementById('u-raw').textContent = u.nonWatermarked;
+                pie(document.getElementById('chartUserTypes'), u.typeLabels, u.typeValues);
+                line(document.getElementById('chartUserSeries'), u.timeseriesLabels, u.timeseriesCounts);
+            }
+        });
+    })();
+</script>
+</body>
+</html>

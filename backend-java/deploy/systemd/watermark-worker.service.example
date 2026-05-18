@@ -1,0 +1,32 @@
+# 安装示例（Ubuntu，假设 conda 环境 /opt/miniconda3/envs/watermark）：
+#   sudo cp deploy/systemd/watermark-worker.service.example /etc/systemd/system/watermark-worker.service
+#   sudo nano /etc/systemd/system/watermark-worker.service   # 核对 User/路径/Python 解释器
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now watermark-worker
+#
+# 前置：
+#   1) 已克隆仓库到 /opt/watermark-app（或你的路径），并在该目录创建 Python 3.9.23 虚拟环境
+#   2) pip install -r requirements.txt
+#   3) apt install ffmpeg
+#   4) 将 ckpts/y_256b_img.pth 等模型文件放到 /opt/watermark-data/ckpts/ 并通过环境变量指向它
+#   5) 环境变量文件 /opt/watermark-api/watermark-worker.env（chmod 600）
+
+[Unit]
+Description=Watermark Python Worker (Redis Stream consumer)
+After=network.target redis.service mysql.service
+# 与 API 一起起，挂一个也不会影响另一个：
+Wants=watermark-api.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/watermark-app
+EnvironmentFile=-/opt/watermark-api/watermark-worker.env
+# 使用显式 Python 解释器路径，避免 PATH 走到错误的 python；conda 环境改成 /opt/miniconda3/envs/watermark/bin/python
+ExecStart=/opt/watermark-app/venv/bin/python -m watermark.worker.redis_stream_worker
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

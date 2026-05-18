@@ -1,6 +1,6 @@
 # 数字水印系统
 
-一个基于 Flask 的数字水印系统，支持对图片、音频、视频和文本文件添加/提取数字水印，并提供按“用户/日期”的文件存储、分页、批量管理、中文路径兼容与临时文件自动清理能力。
+**Web 界面与 HTTP API** 由 **`backend-java`**（Spring Boot、Thymeleaf、`/api/v1/**`）提供；**异步嵌水印**由 Python **`watermark.worker.redis_stream_worker`** 消费 Redis Stream 完成；多媒体算法代码在 **`watermark/`** 目录。支持对图片、音频、视频和文本添加/提取数字水印，以及按用户与日期的文件存储、分页、批量管理与临时文件清理等能力。
 
 ## 功能特点
 
@@ -51,134 +51,55 @@
 
 ### 后端技术栈
 
-- **Flask 3.x**: Web 框架
-- **Flask-SQLAlchemy 3.x**: ORM + 会话管理
-- **Flask-Migrate/Alembic**: 数据库迁移
-- **Flask-Login**: 认证与会话登录（集成 RBAC 权限控制）
-- **Flask-WTF / WTForms**: 表单与校验（含 email-validator）
-- **PyMySQL**: MySQL 驱动（默认连接 MySQL，可切换 SQLite）
-- 多媒体处理：
-- **Pillow/BlindWaterMark**（图像），**ffmpeg-python/Videoseal**（视频），**NumPy/Scipy/Librosa**（音频），**PyMuPDF/Python-docx**（文档）
+- **Spring Boot 3.x**（`backend-java`）：Web、安全、JPA、Flyway、对象存储（COS/MinIO）、任务入队、Thymeleaf 页面
+- **MySQL、Redis**：持久化与 Spring Session / 任务队列
+- **Python 3.9.23**：水印算法与 Worker（`requirements.txt`；无 Flask Web）
+- 多媒体处理：**Pillow**、**ffmpeg**、**Librosa**、**PyMuPDF** 等（见 `watermark/utils`）
 
 ### 前端技术栈
 
-- **Bootstrap 5**: 响应式 UI 与组件
-- **Chart.js**: 首页可视化（类型饼图、近 14 天趋势折线图）
-- **jQuery**: DOM 辅助（少量）
-- **Dropzone.js**（可选）: 大文件/多文件上传体验
-- **自定义样式**: `static/css/custom.css` 与局部内联样式
+- **Thymeleaf** + **Bootstrap 5**（模板与静态资源由 Java 模块提供，Chart.js 等可按需走 CDN）
+- **Chart.js**：仪表盘统计
+- **Dropzone.js**（可选）：上传体验
 
 ### 运行与基础设施
 
-- **数据库**: MySQL（默认 DSN 可在 `.flaskenv`/环境变量中覆盖）
-- **迁移**: `flask initdb --drop` 初始化，`flask db migrate/upgrade` 迁移
-- **静态资源**: 本地托管 + CDN（Chart.js）
+- **数据库 / 结构迁移**：MySQL；表结构由 Java **Flyway** 管理（见 `backend-java`）
+- **配置**：本地与生产环境变量见 **`backend-java/README.md`** 与 **`backend-java/deploy/*.env.example`**
 
 ## 安装和运行
 
-### 环境要求
+### 推荐路径（当前架构）
 
-- **Python 3.9.23** (必须为 3.9.23 版本，不支持其他版本)
-- FFmpeg (用于视频、音频流处理)
-- FFprobe (用于视频、音频流处理)
+1. **克隆与 Git LFS**（若仓库含大文件）：同下文「克隆项目」步骤。
+2. **启动 Java Web + API**：在 **`backend-java`** 下按 **[backend-java/README.md](backend-java/README.md)** 配置 `watermark-api.env`（或 IDE 环境变量），执行 **`mvn -pl web -am spring-boot:run`**（默认 **http://localhost:8080**）。
+3. **（可选）本地跑 Python Worker**：Python 3.9.23，`pip install -r requirements.txt`，按 **`watermark/worker/redis_stream_worker.py`** 文件头配置 **`SQLALCHEMY_DATABASE_URI`**、**`WM_REDIS_*`**、**`INSTANCE_PATH`**、COS 等，执行 **`python -m watermark.worker.redis_stream_worker`**。
+4. **生产部署**（Nginx、systemd、HTTPS）：**[backend-java/docs/DEPLOY-SERVER.md](backend-java/docs/DEPLOY-SERVER.md)**；技术框架（**纯文本架构图**）见 **[backend-java/docs/watermark-java-backend-tech-selection.md](backend-java/docs/watermark-java-backend-tech-selection.md)**。
 
-### 安装步骤
+### 环境与依赖（Worker / 算法）
 
-1. **检查 Python 版本**
+- **Python 3.9.23**（Worker 与算法脚本）
+- **FFmpeg / FFprobe**（视频、音频）
 
 ```bash
 python --version
-# 输出应为: Python 3.9.23
+# 期望: Python 3.9.23
 ```
 
-如果 Python 版本不是 3.9.23，请先安装正确的版本。
-
-2. **克隆项目**
+克隆与 Conda 示例（与历史文档一致，供 Worker 使用）：
 
 ```bash
-# 由于项目中存在大文件，已使用 Git LFS 进行托管（GitHub 有 100MB 文件大小限制）
-
-# 第一步：安装 Git LFS
 git lfs install
-
-# 第二步：克隆仓库（拉取普通文件和大文件指针）
 git clone <repository-url>
-
-# 第三步：拉取大文件
+cd <repository-dir>
 git lfs pull
-```
 
-3. **创建虚拟环境**
-
-**推荐使用 Conda**（更容易管理 Python 版本）：
-
-```bash
-# 创建 conda 环境
 conda create -n watermark python=3.9.23
-
-# 激活环境
 conda activate watermark
-```
-
-或使用 venv：
-
-```bash
-python -m venv venv
-
-# Linux/Mac
-source venv/bin/activate
-
-# Windows
-venv\Scripts\activate
-```
-
-4. **安装依赖**
-
-```bash
-# 安装所有依赖
 pip install -r requirements.txt
 ```
 
-**如果需要 GPU 版本的 PyTorch**：
-
-```bash
-pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu118
-```
-
-5. **配置数据库**
-
-编辑 `.flaskenv` 文件，设置你的 MySQL 数据库配置：
-
-```
-DATABASE_URL=mysql+pymysql://username:password@localhost:3306/watermark_db
-FLASK_ENV=development
-```
-
-6. **初始化数据库**
-
-```bash
-export FLASK_APP=watermark  # Linux/Mac
-# 或
-$env:FLASK_APP="watermark"  # Windows PowerShell
-
-flask initdb
-```
-
-7. **运行应用**
-
-```bash
-flask run
-```
-
-访问 http://localhost:5000 开始使用系统。
-
-8. **Windows Server 兼容性检查（可选）**
-
-如果部署在 Windows Server 环境下，建议运行兼容性检查脚本以确保系统功能正常：
-
-```bash
-python check_windows_compatibility.py
-```
+以下「使用指南」中的功能描述仍适用；页面路由与模板现由 **`backend-java`** 提供（Thymeleaf），不再使用 **`flask run`** 或 **`.flaskenv`**。
 
 ## 使用指南
 
@@ -208,7 +129,7 @@ python check_windows_compatibility.py
 
 - 添加页/提取页：水印文件列表均支持分页
 - 首页：个人“未添加水印/已添加水印”列表支持独立分页参数（`unwatermarked_page`、`watermarked_page`）
-- 分页宏：`templates/macros/pagination.html` 支持不同页码参数名称
+- 分页宏：`backend-java/web/src/main/resources/templates/macros/pagination.html` 支持不同页码参数名称
 
 1. **选择文件**：
 
@@ -316,11 +237,11 @@ learn_flask_the_easy_way/
 
 ### 环境变量
 
-- `SECRET_KEY`: Flask应用密钥
-- `DATABASE_URL`: 数据库连接URL
-- `MAX_CONTENT_LENGTH`: 最大文件上传大小
-- `INSTANCE_PATH`: 实例目录（默认 `instance`）
-- `TEMP_FOLDER`: 临时目录（默认 `instance/temp`）
+Java 与 Worker 的键名见 **`backend-java/deploy/watermark-api.env.example`** 与 **`backend-java/deploy/watermark-worker.env.example`**。常见项包括：
+
+- **`WM_DATASOURCE_URL`** / **`SQLALCHEMY_DATABASE_URI`**：MySQL 连接（Java 与 Python 键名不同）
+- **`WM_INSTANCE_PATH`** / **`INSTANCE_PATH`**：本机实例目录
+- **`MAX_CONTENT_LENGTH`**（若仍在部分脚本中使用）：最大上传大小
 
 ### 文件大小限制
 

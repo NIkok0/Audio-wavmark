@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Watermark Copilot</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    #log { white-space: pre-wrap; background: #111; color: #e8e8e8; padding: 1rem; border-radius: 8px; min-height: 200px; }
+    textarea { width: 100%; min-height: 80px; }
+    label { display: block; margin-top: 0.5rem; font-size: 0.9rem; }
+    button { margin-top: 0.5rem; padding: 0.4rem 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Watermark Copilot</h1>
+  <p>调用同源 <code>/v1/chat</code>（SSE）。需要已配置 <code>OPENAI_API_KEY</code>。</p>
+  <label>conversation_id（可选，用于复用登录 Session）</label>
+  <input id="cid" type="text" style="width:100%" placeholder="留空则每次新建" />
+  <label>消息</label>
+  <textarea id="q" placeholder="例如：任务一直 queued 怎么排查？"></textarea>
+  <label><input type="checkbox" id="danger" /> confirm_dangerous（仅在与 COPILOT_ALLOW_JOB_POST 联用时用于入队水印）</label>
+  <button id="go">发送</button>
+  <h3>输出</h3>
+  <div id="log"></div>
+  <script>
+    const log = document.getElementById("log");
+    document.getElementById("go").onclick = async () => {
+      log.textContent = "";
+      const q = document.getElementById("q").value;
+      const cid = document.getElementById("cid").value.trim();
+      const danger = document.getElementById("danger").checked;
+      const body = {
+        messages: [{ role: "user", content: q }],
+        confirm_dangerous: danger,
+      };
+      if (cid) body.conversation_id = cid;
+      const res = await fetch("/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop();
+        for (const block of parts) {
+          if (!block.trim()) continue;
+          const lines = block.split("\n");
+          let ev = "message";
+          let data = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) ev = line.slice(6).trim();
+            if (line.startsWith("data:")) data += line.slice(5).trim();
+          }
+          try {
+            const j = JSON.parse(data);
+            if (ev === "meta" && j.conversation_id && !document.getElementById("cid").value.trim()) {
+              document.getElementById("cid").value = j.conversation_id;
+            }
+            if (ev === "token") log.textContent += j.text || "";
+            else if (ev !== "meta") log.textContent += "\n[" + ev + "] " + data + "\n";
+          } catch {
+            log.textContent += "\n[" + ev + "] " + data + "\n";
+          }
+        }
+      }
+    };
+  </script>
+</body>
+</html>

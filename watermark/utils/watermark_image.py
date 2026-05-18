@@ -1,17 +1,27 @@
 # Standard library imports
+import logging
 import os
 import uuid
 
 # Third-party imports
 import numpy as np
 from PIL import Image
-from flask import current_app, flash
+from watermark.runtime_paths import get_temp_folder
 from watermark.utils.path_utils import (
     get_user_dated_embed_dir,
     ensure_ascii_local_copy,
     prepare_ascii_output_path,
     maybe_delete_temp,
 )
+
+_log = logging.getLogger(__name__)
+
+
+def _wm_notify(message: str, category: str = "info") -> None:
+    if category == "error":
+        _log.warning("%s", message)
+    else:
+        _log.info("%s", message)
 
 # 图像水印算法所需
 import time
@@ -42,9 +52,7 @@ def normalize_image_format(input_path: str, output_path: str = None) -> str:
         
         # 如果output_path为None，创建临时文件
         if output_path is None:
-            temp_root = current_app.config.get('TEMP_FOLDER')
-            if not temp_root:
-                temp_root = os.path.join(current_app.instance_path, 'temp')
+            temp_root = get_temp_folder()
             os.makedirs(temp_root, exist_ok=True)
             
             _, ext = os.path.splitext(input_path)
@@ -213,7 +221,7 @@ def embed_jpg_dct(input_file, watermark):
 
     # 验证水印长度
     if len(watermark) > (WATERMARK_FIXED_LENGTH - 3):
-        flash(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
+        _wm_notify(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
         return None
     else:
         # 需要补全的长度
@@ -289,7 +297,7 @@ def embed_jpeg_dct(input_file, watermark):
 
     # 验证水印长度
     if len(watermark) > (WATERMARK_FIXED_LENGTH - 3):
-        flash(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
+        _wm_notify(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
         return None
     else:
         # 需要补全的长度
@@ -363,7 +371,7 @@ def embed_png_dct(input_file, watermark):
 
     # 验证水印长度
     if len(watermark) > (WATERMARK_FIXED_LENGTH - 3):
-        flash(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
+        _wm_notify(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
         return None
     else:
         # 需要补全的长度
@@ -437,7 +445,7 @@ def embed_bmp_dct(input_file, watermark):
 
     # 验证水印长度
     if len(watermark) > (WATERMARK_FIXED_LENGTH - 3):
-        flash(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
+        _wm_notify(f"水印长度不能超过{WATERMARK_FIXED_LENGTH - 3}个字符", "error")
         return None
     else:
         # 需要补全的长度
@@ -536,12 +544,12 @@ def extract_jpg_dct(input_file):
             maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 检查水印末尾是否符合padding模式
     if not watermark.endswith('水'):
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 从末尾开始向前查找padding的开始位置
@@ -562,7 +570,7 @@ def extract_jpg_dct(input_file):
         return original_watermark
 
     # 如果不符合padding模式
-    flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+    _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
     return None
 
 def extract_jpeg_dct(input_file):
@@ -597,12 +605,12 @@ def extract_jpeg_dct(input_file):
             maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 检查水印末尾是否符合padding模式
     if not watermark.endswith('水'):
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 从末尾开始向前查找padding的开始位置
@@ -623,7 +631,7 @@ def extract_jpeg_dct(input_file):
         return original_watermark
 
     # 如果不符合padding模式
-    flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+    _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
     return None
 
 def extract_png_dct(input_file):
@@ -658,12 +666,12 @@ def extract_png_dct(input_file):
             maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 检查水印末尾是否符合padding模式
     if not watermark.endswith('水'):
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 从末尾开始向前查找padding的开始位置
@@ -684,7 +692,7 @@ def extract_png_dct(input_file):
         return original_watermark
 
     # 如果不符合padding模式
-    flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+    _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
     return None
 
 def extract_bmp_dct(input_file):
@@ -719,12 +727,12 @@ def extract_bmp_dct(input_file):
             maybe_delete_temp(normalized_input)
 
     if len(watermark) != WATERMARK_FIXED_LENGTH:
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 检查水印末尾是否符合padding模式
     if not watermark.endswith('水'):
-        flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+        _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
         return None
 
     # 从末尾开始向前查找padding的开始位置
@@ -745,7 +753,7 @@ def extract_bmp_dct(input_file):
         return original_watermark
 
     # 如果不符合padding模式
-    flash("提取失败：提取算法与原嵌入算法不匹配", "error")
+    _wm_notify("提取失败：提取算法与原嵌入算法不匹配", "error")
     return None
 
 # # Cox算法实现

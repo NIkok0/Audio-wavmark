@@ -1,0 +1,72 @@
+# 前端域名（www）站点示例：与 API 站点（api.loadsadar.asia）并存，均反代到本机 Spring Boot :8080。
+#
+# 安装：
+#   sudo cp deploy/nginx-www.loadsadar.asia.conf.example /etc/nginx/sites-available/www.loadsadar.asia.conf
+#   sudo ln -s /etc/nginx/sites-available/www.loadsadar.asia.conf /etc/nginx/sites-enabled/
+#   sudo certbot --nginx -d loadsadar.asia -d www.loadsadar.asia
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# 前置：watermark-api 已监听 127.0.0.1:8080（Thymeleaf 页面 + /api/v1/** + /static/** 等由应用提供）
+
+upstream watermark_java_www {
+    server 127.0.0.1:8080;
+    keepalive 32;
+}
+
+# 裸域 → www
+server {
+    listen 80;
+    listen [::]:80;
+    server_name loadsadar.asia;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://www.loadsadar.asia$request_uri;
+    }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.loadsadar.asia;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name loadsadar.asia;
+
+    # certbot 会自动填充 ssl_certificate
+    return 301 https://www.loadsadar.asia$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name www.loadsadar.asia;
+
+    # certbot 会自动填充 ssl_certificate / ssl_certificate_key
+    client_max_body_size 500m;
+
+    location / {
+        proxy_pass http://watermark_java_www;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+}

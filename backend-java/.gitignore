@@ -1,0 +1,11 @@
+target/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+*.log
+
+# 本地打包产物（含 jar 和脚本，不入库）
+deploy-bundle/
+deploy-bundle.zip

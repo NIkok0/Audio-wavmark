@@ -3,7 +3,6 @@ import json
 import subprocess as sp
 import numpy as np
 import wave
-from flask import current_app
 import hashlib
 
 # Third-party imports

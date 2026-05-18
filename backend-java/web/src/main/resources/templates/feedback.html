@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>问题反馈 - 数字水印系统</title>
+    <th:block th:replace="~{base :: commonHead}"/>
+</head>
+<body>
+<nav th:replace="~{base :: navbar}"></nav>
+<aside th:replace="~{base :: sidebar}"></aside>
+
+<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4" style="max-width:720px;">
+    <h1 class="h4 mb-3">问题反馈</h1>
+    <p class="text-secondary small">与 Flask 阶段一致：当前不写入数据库，仅前端演示。</p>
+    <form id="fb" class="card shadow-sm p-3">
+        <div class="mb-2"><label class="form-label">称呼</label><input class="form-control" name="name"/></div>
+        <div class="mb-2"><label class="form-label">联系方式</label><input class="form-control" name="contact"/></div>
+        <div class="mb-2"><label class="form-label">类型</label><input class="form-control" name="issue_type"/></div>
+        <div class="mb-2"><label class="form-label">标题</label><input class="form-control" name="title"/></div>
+        <div class="mb-3"><label class="form-label">描述</label><textarea class="form-control" name="description" rows="4"></textarea></div>
+        <button type="submit" class="btn btn-primary">提交</button>
+    </form>
+</main>
+<th:block th:replace="~{base :: bootstrapJs}"/>
+<script>
+    document.getElementById('fb').addEventListener('submit', function (e) {
+        e.preventDefault();
+        alert('感谢您的反馈！（演示：未调用后端）');
+    });
+</script>
+</body>
+</html>

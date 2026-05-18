@@ -1,0 +1,65 @@
+name: backend-java CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "backend-java/**"
+      - ".github/workflows/backend-java-ci.yml"
+  pull_request:
+    paths:
+      - "backend-java/**"
+      - ".github/workflows/backend-java-ci.yml"
+
+concurrency:
+  group: backend-java-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend-java
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Verify Docker (Testcontainers)
+        run: |
+          docker version
+          docker info --format '{{.ServerVersion}}'
+
+      - name: Maven verify (unit + Testcontainers IT)
+        run: mvn -B -pl web -am verify
+
+      - name: List JAR output
+        run: ls -la web/target/*.jar
+
+      - name: Upload API JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: watermark-api-jar-${{ github.run_number }}
+          path: backend-java/web/target/web-*.jar
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload Surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-${{ github.run_number }}
+          path: backend-java/**/target/surefire-reports/
+          retention-days: 7
+          if-no-files-found: ignore

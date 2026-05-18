@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>文件保留设置 - 数字水印系统</title>
+    <th:block th:replace="~{base :: commonHead}"/>
+</head>
+<body>
+<nav th:replace="~{base :: navbar}"></nav>
+<aside th:replace="~{base :: sidebar}"></aside>
+
+<main class="container py-4 with-sidebar" style="max-width:640px;">
+    <h1 class="h4 mb-3">文件保留天数</h1>
+    <p class="text-secondary small">对应接口 <code>PATCH /api/v1/users/me/retention</code>，范围 1–365。</p>
+    <div class="mb-3">
+        <label class="form-label" for="days">保留天数</label>
+        <input type="number" min="1" max="365" class="form-control" id="days" value="7"/>
+    </div>
+    <button type="button" class="btn btn-primary" id="saveBtn">保存</button>
+    <div class="alert alert-info mt-3 d-none" id="msg"></div>
+</main>
+<th:block th:replace="~{base :: bootstrapJs}"/>
+<script>
+    function readCookie(name) {
+        var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+    document.getElementById('saveBtn').addEventListener('click', async function () {
+        const days = parseInt(document.getElementById('days').value, 10);
+        const msg = document.getElementById('msg');
+        msg.classList.add('d-none');
+        const xsrf = readCookie('XSRF-TOKEN');
+        const res = await fetch('/api/v1/users/me/retention', {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: Object.assign({'Content-Type': 'application/json'}, xsrf ? {'X-XSRF-TOKEN': xsrf} : {}),
+            body: JSON.stringify({retentionDays: days})
+        });
+        msg.classList.remove('d-none', 'alert-success', 'alert-danger');
+        if (res.ok) {
+            msg.classList.add('alert-success');
+            msg.textContent = '已保存';
+        } else {
+            msg.classList.add('alert-danger');
+            msg.textContent = '保存失败：' + res.status + ' ' + await res.text();
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+spring:
+  application:
+    name: watermark-api
+  profiles:
+    active: ${WM_PROFILE:dev}
+  thymeleaf:
+    cache: true
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  session:
+    store-type: redis
+    redis:
+      namespace: spring:session:wm
+
+server:
+  servlet:
+    session:
+      cookie:
+        name: WMSESSIONID
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+resilience4j:
+  retry:
+    instances:
+      redisStreamPublish:
+        maxAttempts: 4
+        waitDuration: 200ms
+        retryExceptions:
+          - org.springframework.data.redis.RedisSystemException
+          - org.springframework.data.redis.RedisConnectionFailureException
+
+# 本机存储根目录（Flask INSTANCE_PATH）；对象存储见阶段 3
+wm:
+  storage:
+    backend: ${WM_STORAGE_BACKEND:minio}
+    instance-path: ${WM_INSTANCE_PATH:instance}
+    presign-put-ttl: ${WM_PRESIGN_PUT_TTL:15m}
+    presign-get-ttl: ${WM_PRESIGN_GET_TTL:15m}
+    max-hash-bytes: ${WM_MAX_HASH_BYTES:104857600}
+    limits:
+      image: ${WM_MAX_BYTES_IMAGE:104857600}
+      video: ${WM_MAX_BYTES_VIDEO:104857600}
+      audio: ${WM_MAX_BYTES_AUDIO:104857600}
+      text: ${WM_MAX_BYTES_TEXT:104857600}
+      default-max: ${WM_MAX_BYTES_DEFAULT:104857600}
+    minio:
+      endpoint: ${WM_MINIO_ENDPOINT:}
+      access-key: ${WM_MINIO_ACCESS_KEY:}
+      secret-key: ${WM_MINIO_SECRET_KEY:}
+      bucket: ${WM_MINIO_BUCKET:watermark}
+      region: ${WM_MINIO_REGION:us-east-1}
+    cos:
+      secret-id: ${WM_COS_SECRET_ID:}
+      secret-key: ${WM_COS_SECRET_KEY:}
+      region: ${WM_COS_REGION:ap-guangzhou}
+      bucket: ${WM_COS_BUCKET:}
+      policy-json: ${WM_COS_POLICY_JSON:}
+      sts-duration: ${WM_COS_STS_DURATION:15m}
+  jobs:
+    stream-key: ${WM_JOBS_STREAM_KEY:wm:stream:watermark}
+    consumer-group: ${WM_JOBS_CONSUMER_GROUP:wm:workers}
+    job-key-prefix: ${WM_JOBS_JOB_KEY_PREFIX:wm:job:}
+    idempotency-key-prefix: ${WM_JOBS_IDEM_PREFIX:wm:idem:}
+    idempotency-ttl: ${WM_JOBS_IDEM_TTL:24h}
+  retention:
+    cleanup-enabled: ${WM_RETENTION_CLEANUP_ENABLED:true}
+    cleanup-cron: ${WM_RETENTION_CLEANUP_CRON:0 0 2 * * *}
+    default-retention-days: ${WM_RETENTION_DEFAULT_DAYS:7}
+    lock-key: ${WM_RETENTION_LOCK_KEY:wm:lock:retention:cleanup}
+    lock-ttl: ${WM_RETENTION_LOCK_TTL:15m}
+  rate-limit:
+    enabled: ${WM_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${WM_RATE_LIMIT_WINDOW:60}
+    rules:
+      - key: POST:/api/v1/jobs/watermark
+        max-requests: 30
+      - key: POST:/api/v1/files
+        max-requests: 40
+      - key: POST:/api/v1/files/complete
+        max-requests: 60
+      - key: POST:/api/v1/storage/sts
+        max-requests: 120
+      - key: GET:/api/v1/files/*/content
+        max-requests: 120

@@ -1,0 +1,10 @@
+# Testcontainers 集成测试（EndToEndWatermarkFlowTest）与本地 @ActiveProfiles("test") 共用
+spring:
+  session:
+    timeout: 30m
+
+wm:
+  rate-limit:
+    enabled: false
+  retention:
+    cleanup-enabled: false

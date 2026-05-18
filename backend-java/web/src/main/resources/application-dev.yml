@@ -1,0 +1,34 @@
+# 密钥与口令通过环境变量注入，勿提交真实生产配置。
+spring:
+  session:
+    # 本机开发默认用内存 Session，避免 Redis 序列化问题阻塞登录联调；生产仍用 redis（application.yml）。
+    store-type: none
+  thymeleaf:
+    cache: false
+  datasource:
+    url: ${WM_DATASOURCE_URL:jdbc:mysql://localhost:3306/watermark?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&createDatabaseIfNotExist=true}
+    username: ${WM_DATASOURCE_USERNAME:root}
+    password: ${WM_DATASOURCE_PASSWORD:devpass}
+    hikari:
+      maximum-pool-size: 10
+  data:
+    redis:
+      host: ${WM_REDIS_HOST:localhost}
+      port: ${WM_REDIS_PORT:6379}
+      password: ${WM_REDIS_PASSWORD:}
+
+# 本机文件根目录（与 Flask INSTANCE_PATH 一致）；部署到服务器时可设为绝对路径如 /opt/watermark/instance
+wm:
+  storage:
+    instance-path: ${WM_INSTANCE_PATH:instance}
+    minio:
+      endpoint: ${WM_MINIO_ENDPOINT:http://127.0.0.1:9000}
+      access-key: ${WM_MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${WM_MINIO_SECRET_KEY:minioadmin}
+      bucket: ${WM_MINIO_BUCKET:watermark}
+      region: ${WM_MINIO_REGION:us-east-1}
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN

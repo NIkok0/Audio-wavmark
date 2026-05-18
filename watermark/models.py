@@ -1,116 +1,40 @@
-# Standard library imports
+"""
+Worker 使用的最小 ORM：仅映射 files 表（无 Flask-SQLAlchemy）。
+"""
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Optional
 
-# Third-party imports
-from flask_login import UserMixin
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-# Local imports
-from watermark import db
-from watermark.utils.time_provider import get_now_utc
 
-# 1. 用户-组 多对多关联表
-user_group_rel = db.Table('user_group_rel',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
-    db.Column('group_id', db.Integer, db.ForeignKey('groups.id'), primary_key=True)
-)
+class Base(DeclarativeBase):
+    pass
 
-# 2. 用户表
-class User(db.Model, UserMixin):
-    __tablename__ = 'users'
 
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), unique=True, nullable=False)  # 用户名
-    email = db.Column(db.String(64), unique=True, nullable=False)     # 邮箱
-    password = db.Column(db.String(512), nullable=False)              # 密码
-    is_admin = db.Column(db.Boolean, default=False)                  # 是否管理员
-    role = db.Column(db.String(20), default='member')                # 用户角色：super_admin, admin, member
-    created_at = db.Column(db.DateTime, default=get_now_utc)         # 创建时间
-    updated_at = db.Column(db.DateTime, default=get_now_utc, onupdate=get_now_utc)  # 更新时间
-    is_active = db.Column(db.Boolean, default=True)                 # 是否激活
-    is_embed = db.Column(db.Boolean, default=True)                 # 是否允许嵌入水印
-    is_extract = db.Column(db.Boolean, default=True) 
-    retention_days = db.Column(db.Integer, nullable=True)            # 用户自定义文件保留天数（为空表示使用系统默认）
+class File(Base):
+    __tablename__ = "files"
 
-    # 关系
-    groups = db.relationship("Group", secondary=user_group_rel, back_populates="users")
-    uploaded_files = db.relationship("File", back_populates="uploader")
-    # operation_logs = db.relationship("OperationLog", back_populates="user")
-
-    def get_id(self):
-        return str(self.id)
-
-    def is_super_admin(self):
-        """检查是否为超级管理员"""
-        return self.role == 'super_admin'
-    
-    def is_admin_user(self):
-        """检查是否为管理员（包括超级管理员）"""
-        return self.role in ['super_admin', 'admin']
-    
-    def can_manage_users(self):
-        """检查是否有用户管理权限"""
-        return self.role == 'super_admin'
-    
-    def can_manage_groups(self):
-        """检查是否有组管理权限"""
-        return self.role in ['super_admin', 'admin']
-    
-# 3. 用户组表
-class Group(db.Model):
-    __tablename__ = 'groups'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(64), unique=True, nullable=False)
-    description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=get_now_utc)
-
-    # 关系
-    users = db.relationship("User", secondary=user_group_rel, back_populates="groups")
-    files = db.relationship("File", back_populates="group")
-
-# 4. 文件表
-class File(db.Model):
-    __tablename__ = 'files'
-
-    id = db.Column(db.Integer, primary_key=True)
-    filename = db.Column(db.String(255), nullable=False)
-    original_path = db.Column(db.String(512), nullable=False)
-    watermarked_path = db.Column(db.String(512), nullable=True)
-    file_hash = db.Column(db.String(128), nullable=False)
-    file_watermark_hash = db.Column(db.String(128), nullable=True)
-    has_watermark = db.Column(db.Boolean, default=False)
-    file_type = db.Column(db.String(20), nullable=False)  # image/video/audio/text
-    file_format = db.Column(db.String(20), nullable=False)  # jpg/png/mp4/wav/txt等
-    file_size = db.Column(db.BigInteger, nullable=False)
-    mime_type = db.Column(db.String(100), nullable=False)
-    watermark_type = db.Column(db.String(50), nullable=True)
-    watermark_text = db.Column(db.Text, nullable=True)  
-    original_watermark_text = db.Column(db.Text, nullable=True)  # 存储原始水印文本
-    watermark_seed = db.Column(db.String(20), nullable=True)  # 存储随机种子
-    processing_status = db.Column(db.String(20), default='pending')  # pending/completed/failed
-    error_message = db.Column(db.Text, nullable=True)
-
-    uploader_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
-
-    created_at = db.Column(db.DateTime, default=get_now_utc)
-    updated_at = db.Column(db.DateTime, default=get_now_utc, onupdate=get_now_utc)
-
-    # 关系
-    uploader = db.relationship("User", back_populates="uploaded_files")
-    group = db.relationship("Group", back_populates="files")
-
-# class OperationLog(db.Model):
-#     __tablename__ = 'operation_logs'
-#     id = db.Column(db.Integer, primary_key=True)
-#     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-#     file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
-#     operation_type = db.Column(db.String(50), nullable=False)  # upload/embed/extract/download/delete
-#     operation_details = db.Column(db.Text, nullable=True)
-#     ip_address = db.Column(db.String(45), nullable=True)
-#     user_agent = db.Column(db.Text, nullable=True)
-#     success = db.Column(db.Boolean, default=True)
-#     error_message = db.Column(db.Text, nullable=True)
-#     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-#     user = db.relationship("User", back_populates="operation_logs")
-#     file = db.relationship("File", backref="operation_logs")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    watermarked_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    file_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    file_watermark_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    has_watermark: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    file_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    file_format: Mapped[str] = mapped_column(String(20), nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    watermark_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    watermark_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    original_watermark_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    watermark_seed: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    processing_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    uploader_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    group_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("groups.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)

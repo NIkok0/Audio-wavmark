@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>退出登录</title>
+</head>
+<body>
+<p>正在退出…</p>
+<script>
+    (function () {
+        function readCookie(name) {
+            var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+        fetch('/api/v1/auth/logout', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: (function () {
+                var xsrf = readCookie('XSRF-TOKEN');
+                return xsrf ? {'X-XSRF-TOKEN': xsrf} : {};
+            })()
+        }).catch(function () {
+        }).finally(function () {
+            window.location.replace('/signin');
+        });
+    })();
+</script>
+</body>
+</html>

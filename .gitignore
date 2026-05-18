@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 venv/
 .env
+*.env
 instance/
 hyr.session.sql
 .vscode
@@ -12,4 +13,34 @@ migrations/
 ckpts/y_256b_img.pth
 ffprobe.exe
 ffmpeg.exe
+
+# Java / Maven build outputs
+target/
+backend-java/**/target/
+backend-java/tools/minio-data/
+
+# Local deploy artifacts and generated bundles
+/deploy-upload/
+/artifacts/
+/storage/
+*.tar.gz
+*.zip
+code-bundle.zip
+watermark-deploy.tar.gz
+
+# Runtime data, logs, and local secrets
+*.log
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+secrets/
+*.session.sql
+.deploy_*
+
+# OS/editor noise
+.idea/
+.DS_Store
+Thumbs.db
 

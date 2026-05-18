@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>权限管理 - 数字水印系统</title>
+    <th:block th:replace="~{base :: commonHead}"/>
+</head>
+<body>
+<nav th:replace="~{base :: navbar}"></nav>
+<aside th:replace="~{base :: sidebar}"></aside>
+
+<main class="container py-4 with-sidebar">
+    <h1 class="h4 mb-3">权限管理</h1>
+    <p class="text-secondary">用户与组数据来自 <code>GET /api/v1/admin/users</code>、<code>GET /api/v1/admin/groups</code> 等接口。以下为只读预览（分页与写操作可继续用 Swagger 或后续补全 JS）。</p>
+    <pre id="admin-json" class="bg-dark text-light p-3 rounded small" style="max-height:420px;overflow:auto;">加载中…</pre>
+</main>
+<th:block th:replace="~{base :: bootstrapJs}"/>
+<script>
+    document.addEventListener('DOMContentLoaded', async function () {
+        const el = document.getElementById('admin-json');
+        try {
+            const res = await fetch('/api/v1/admin/users?page=0&size=20', {credentials: 'same-origin'});
+            const txt = await res.text();
+            el.textContent = res.status + ' ' + res.statusText + '\n' + txt;
+        } catch (e) {
+            el.textContent = String(e);
+        }
+    });
+</script>
+</body>
+</html>

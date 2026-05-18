@@ -1,0 +1,40 @@
+# 生产 profile：WM_PROFILE=prod 时加载。敏感项务必用环境变量覆盖。
+spring:
+  thymeleaf:
+    cache: true
+  datasource:
+    url: ${WM_DATASOURCE_URL}
+    username: ${WM_DATASOURCE_USERNAME}
+    password: ${WM_DATASOURCE_PASSWORD}
+  data:
+    redis:
+      host: ${WM_REDIS_HOST}
+      port: ${WM_REDIS_PORT}
+      password: ${WM_REDIS_PASSWORD:}
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        secure: true
+        # 跨子域访问（前端 www.loadsadar.asia，API api.loadsadar.asia）必须 None；
+        # 如改为同域反代可回退到 lax。
+        same-site: ${WM_SESSION_COOKIE_SAME_SITE:none}
+
+wm:
+  storage:
+    instance-path: ${WM_INSTANCE_PATH}
+  cors:
+    enabled: ${WM_CORS_ENABLED:false}
+    allowed-origins: ${WM_CORS_ALLOWED_ORIGINS:}
+    allowed-methods: ${WM_CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD}
+    allowed-headers: ${WM_CORS_ALLOWED_HEADERS:*}
+    exposed-headers: ${WM_CORS_EXPOSED_HEADERS:X-Request-Id}
+    max-age-seconds: ${WM_CORS_MAX_AGE:3600}
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: INFO
