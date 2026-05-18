@@ -67,7 +67,7 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           if [[ -n "${DEPLOY_SSH_KEY_B64}" ]]; then
-            printf '%s' "${DEPLOY_SSH_KEY_B64}" | base64 -d > ~/.ssh/watermark_deploy_key
+            printf '%s' "${DEPLOY_SSH_KEY_B64}" | tr -d '[:space:]' | base64 -d > ~/.ssh/watermark_deploy_key
           else
             printf '%s\n' "${DEPLOY_SSH_KEY}" | tr -d '\r' > ~/.ssh/watermark_deploy_key
           fi
