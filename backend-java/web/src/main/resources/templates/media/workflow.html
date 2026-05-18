@@ -4,154 +4,202 @@
     <title th:text="${mediaLabel} + ' - 数字水印系统'">媒体处理 - 数字水印系统</title>
     <th:block th:replace="~{base :: commonHead}"/>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
-    <style>
-        .media-shell { max-width: 1180px; }
-        .media-hero {
-            border-radius: 8px;
-            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
-            border: 1px solid #dbe4ff;
-            padding: 24px;
-        }
-        .media-icon {
-            width: 56px; height: 56px; border-radius: 8px;
-            display: inline-flex; align-items: center; justify-content: center;
-            background: #0d6efd; color: #fff; font-size: 28px;
-        }
-        .media-action-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            background: #fff;
-            height: 100%;
-            transition: transform .15s ease, box-shadow .15s ease;
-        }
-        .media-action-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,23,42,.08); }
-        .upload-drop {
-            border: 2px dashed #9ca3af;
-            border-radius: 8px;
-            padding: 28px;
-            background: #f9fafb;
-            text-align: center;
-        }
-        .upload-drop.dragover { border-color: #0d6efd; background: #eff6ff; }
-        .file-row { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
-        .file-row + .file-row { margin-top: 10px; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-        .status-pending { background: #f59e0b; }
-        .status-done { background: #10b981; }
-        .status-error { background: #ef4444; }
-        .small-muted { color: #6b7280; font-size: .875rem; }
-    </style>
 </head>
 <body>
 <nav th:replace="~{base :: navbar}"></nav>
 <aside th:replace="~{base :: sidebar}"></aside>
 
-<main class="container py-4 with-sidebar media-shell"
+<main class="container py-4 with-sidebar wm-media-shell"
       th:attr="data-media=${media},data-step=${stepKey},data-accepts=${accepts}">
-    <div class="media-hero mb-4">
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <span class="media-icon"><i th:class="'bi ' + ${mediaIcon}"></i></span>
-            <div class="flex-grow-1">
-                <h1 class="h3 mb-1" th:text="${mediaLabel} + '水印处理'">媒体水印处理</h1>
-                <div class="small-muted">上传文件、嵌入水印、下载结果，并查看任务处理状态。</div>
+    <section class="wm-page-hero mb-4">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-3">
+                <span class="wm-media-icon"><i th:class="'bi ' + ${mediaIcon}"></i></span>
+                <div>
+                    <h1 class="h3 mb-1" th:text="${mediaLabel} + '水印处理'">媒体水印处理</h1>
+                    <p class="text-secondary mb-0">上传、嵌入、提取，并跟踪文件处理状态。</p>
+                </div>
             </div>
-            <div class="btn-group">
-                <a class="btn btn-outline-primary" th:classappend="${stepKey == 'process'} ? ' active'" th:href="${processUrl}">流程</a>
-                <a class="btn btn-outline-primary" th:classappend="${stepKey == 'upload'} ? ' active'" th:href="${uploadUrl}">上传</a>
-                <a class="btn btn-outline-primary" th:classappend="${stepKey == 'add'} ? ' active'" th:href="${addUrl}">加水印</a>
-                <a class="btn btn-outline-primary" th:classappend="${stepKey == 'extract'} ? ' active'" th:href="${extractUrl}">提取</a>
-            </div>
+            <span class="badge text-bg-light border px-3 py-2">
+                支持格式：<span th:text="${accepts}">files</span>
+            </span>
         </div>
-    </div>
+
+        <nav class="wm-stepper mt-4" aria-label="媒体处理步骤">
+            <a class="wm-step" th:classappend="${stepKey == 'process'} ? ' active'" th:href="${processUrl}">
+                <span class="wm-step-icon"><i class="bi bi-diagram-3"></i></span>
+                <span class="wm-step-copy">
+                    <span class="wm-step-title">总览</span>
+                    <span class="wm-step-desc">查看处理路径</span>
+                </span>
+            </a>
+            <a class="wm-step" th:classappend="${stepKey == 'upload'} ? ' active'" th:href="${uploadUrl}">
+                <span class="wm-step-icon"><i class="bi bi-cloud-upload"></i></span>
+                <span class="wm-step-copy">
+                    <span class="wm-step-title">上传</span>
+                    <span class="wm-step-desc">添加原始文件</span>
+                </span>
+            </a>
+            <a class="wm-step" th:classappend="${stepKey == 'add'} ? ' active'" th:href="${addUrl}">
+                <span class="wm-step-icon"><i class="bi bi-shield-plus"></i></span>
+                <span class="wm-step-copy">
+                    <span class="wm-step-title">嵌入</span>
+                    <span class="wm-step-desc">提交水印任务</span>
+                </span>
+            </a>
+            <a class="wm-step" th:classappend="${stepKey == 'extract'} ? ' active'" th:href="${extractUrl}">
+                <span class="wm-step-icon"><i class="bi bi-search"></i></span>
+                <span class="wm-step-copy">
+                    <span class="wm-step-title">提取</span>
+                    <span class="wm-step-desc">读取水印内容</span>
+                </span>
+            </a>
+        </nav>
+    </section>
 
     <div id="alertHost"></div>
 
-    <section th:if="${stepKey == 'process'}">
+    <section class="wm-panel mb-4" th:if="${stepKey == 'process'}">
+        <div class="wm-panel-header">
+            <div>
+                <h2 class="h5 mb-1">处理流程总览</h2>
+                <p class="text-secondary mb-0">按顺序上传文件、提交水印任务，再在下方文件列表跟踪状态。</p>
+            </div>
+        </div>
         <div class="row g-3">
             <div class="col-md-4">
-                <a class="media-action-card d-block p-4 text-decoration-none text-dark" th:href="${uploadUrl}">
-                    <i class="bi bi-cloud-upload h2 text-primary"></i>
-                    <h2 class="h5 mt-3">上传文件</h2>
-                    <p class="small-muted mb-0">选择本地文件上传到系统，上传成功后自动出现在文件列表。</p>
+                <a class="wm-action-tile" th:href="${uploadUrl}">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    <strong>上传文件</strong>
+                    <span>选择或拖拽本地文件进入系统。</span>
                 </a>
             </div>
             <div class="col-md-4">
-                <a class="media-action-card d-block p-4 text-decoration-none text-dark" th:href="${addUrl}">
-                    <i class="bi bi-shield-plus h2 text-success"></i>
-                    <h2 class="h5 mt-3">嵌入水印</h2>
-                    <p class="small-muted mb-0">选择未处理文件，输入水印文本，提交异步任务。</p>
+                <a class="wm-action-tile" th:href="${addUrl}">
+                    <i class="bi bi-shield-check"></i>
+                    <strong>嵌入水印</strong>
+                    <span>选择待处理文件并提交异步任务。</span>
                 </a>
             </div>
             <div class="col-md-4">
-                <a class="media-action-card d-block p-4 text-decoration-none text-dark" th:href="${extractUrl}">
-                    <i class="bi bi-search h2 text-info"></i>
-                    <h2 class="h5 mt-3">提取水印</h2>
-                    <p class="small-muted mb-0">第一阶段保留入口；提取任务接口接入后可直接启用。</p>
+                <a class="wm-action-tile" th:href="${extractUrl}">
+                    <i class="bi bi-search-heart"></i>
+                    <strong>提取水印</strong>
+                    <span>为后续提取任务保留清晰入口。</span>
                 </a>
             </div>
         </div>
-        <div class="card mt-4">
-            <div class="card-header bg-white fw-semibold">最近文件</div>
-            <div class="card-body"><div id="recentFiles"></div></div>
-        </div>
     </section>
 
-    <section th:if="${stepKey == 'upload'}">
-        <div class="row g-4">
-            <div class="col-lg-5">
-                <div class="upload-drop" id="dropZone">
-                    <i class="bi bi-cloud-arrow-up display-5 text-primary"></i>
-                    <h2 class="h5 mt-3">选择或拖拽文件上传</h2>
-                    <p class="small-muted">支持格式：<span th:text="${accepts}">files</span></p>
-                    <input class="form-control" type="file" id="fileInput" multiple th:attr="accept=${accepts}"/>
-                    <button class="btn btn-success mt-3" id="uploadBtn" type="button">
-                        <i class="bi bi-upload"></i> 开始上传
-                    </button>
-                </div>
-                <div id="uploadQueue" class="mt-3"></div>
+    <section class="wm-panel mb-4" th:if="${stepKey == 'upload'}">
+        <div class="wm-panel-header">
+            <div>
+                <h2 class="h5 mb-1">当前操作：上传文件</h2>
+                <p class="text-secondary mb-0">上传成功后，文件会出现在下方列表中，状态默认为待处理。</p>
             </div>
+            <button class="btn btn-primary" id="uploadBtn" type="button">
+                <i class="bi bi-upload"></i> 开始上传
+            </button>
+        </div>
+        <div class="wm-upload-drop" id="dropZone">
+            <i class="bi bi-cloud-arrow-up display-5 text-primary"></i>
+            <h3 class="h5 mt-3 mb-1">拖拽文件到这里，或点击选择文件</h3>
+            <p class="text-secondary mb-3">支持 <span th:text="${accepts}">files</span></p>
+            <input class="form-control wm-file-input" type="file" id="fileInput" multiple th:attr="accept=${accepts}"/>
+        </div>
+        <div id="uploadQueue" class="wm-upload-queue mt-3"></div>
+    </section>
+
+    <section class="wm-panel mb-4" th:if="${stepKey == 'add'}">
+        <div class="wm-panel-header">
+            <div>
+                <h2 class="h5 mb-1">当前操作：嵌入水印</h2>
+                <p class="text-secondary mb-0">先在下方文件列表选择一个文件，再输入水印内容并提交任务。</p>
+            </div>
+            <button class="btn btn-primary" id="enqueueBtn" type="button" disabled>
+                <i class="bi bi-send"></i> 提交任务
+            </button>
+        </div>
+        <div class="row g-3 align-items-stretch">
             <div class="col-lg-7">
-                <div class="card">
-                    <div class="card-header bg-white fw-semibold">文件列表</div>
-                    <div class="card-body"><div id="fileList"></div></div>
-                </div>
+                <label class="form-label" for="watermarkText">水印文本</label>
+                <textarea class="form-control" id="watermarkText" rows="5" placeholder="请输入要嵌入的水印内容"></textarea>
             </div>
-        </div>
-    </section>
-
-    <section th:if="${stepKey == 'add'}">
-        <div class="row g-4">
             <div class="col-lg-5">
-                <div class="card">
-                    <div class="card-header bg-white fw-semibold">提交水印任务</div>
-                    <div class="card-body">
-                        <label class="form-label" for="watermarkText">水印文本</label>
-                        <textarea class="form-control" id="watermarkText" rows="4" placeholder="请输入要嵌入的水印内容"></textarea>
-                        <button class="btn btn-primary mt-3" id="enqueueBtn" type="button" disabled>
-                            <i class="bi bi-send"></i> 提交任务
-                        </button>
-                        <div id="jobStatus" class="mt-3 small-muted"></div>
-                    </div>
+                <div class="wm-selected-file">
+                    <span class="text-secondary small">当前选择</span>
+                    <strong id="selectedFileName">尚未选择文件</strong>
+                    <span id="selectedFileMeta">请在下方文件列表点击“选择”。</span>
                 </div>
-            </div>
-            <div class="col-lg-7">
-                <div class="card">
-                    <div class="card-header bg-white fw-semibold">选择文件</div>
-                    <div class="card-body"><div id="fileList"></div></div>
-                </div>
+                <div id="jobStatus" class="mt-3 text-secondary small"></div>
             </div>
         </div>
     </section>
 
-    <section th:if="${stepKey == 'extract'}">
-        <div class="card">
-            <div class="card-header bg-white fw-semibold">提取水印</div>
-            <div class="card-body">
-                <div class="alert alert-info mb-4">
-                    提取水印页面已迁移。当前 Java 后端尚未提供提取任务接口，第一阶段先保留文件选择和入口提示。
-                </div>
-                <div id="fileList"></div>
+    <section class="wm-panel mb-4" th:if="${stepKey == 'extract'}">
+        <div class="wm-panel-header">
+            <div>
+                <h2 class="h5 mb-1">当前操作：提取水印</h2>
+                <p class="text-secondary mb-0">提取任务入口已保留。当前阶段可先在文件列表查看和管理已上传文件。</p>
             </div>
+        </div>
+        <div class="alert alert-info mb-0">
+            Java 后端提取任务接口接入后，这里将复用下方文件列表的选择能力提交提取任务。
+        </div>
+    </section>
+
+    <section class="wm-panel">
+        <div class="wm-panel-header">
+            <div>
+                <h2 class="h5 mb-1">文件列表</h2>
+                <p class="text-secondary mb-0">按文件名检索，并通过状态列跟踪上传和水印处理进度。</p>
+            </div>
+            <button class="btn btn-outline-secondary" id="refreshFilesBtn" type="button">
+                <i class="bi bi-arrow-clockwise"></i> 刷新
+            </button>
+        </div>
+
+        <div class="wm-file-toolbar mb-3">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input class="form-control" id="fileSearchInput" placeholder="按文件名检索"/>
+            </div>
+            <select class="form-select" id="statusFilter" aria-label="状态筛选">
+                <option value="">全部状态</option>
+                <option value="pending">待处理</option>
+                <option value="processing">处理中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+            </select>
+            <button class="btn btn-primary" id="searchFilesBtn" type="button">查询</button>
+        </div>
+
+        <div class="wm-status-pills mb-3" role="group" aria-label="快捷状态筛选">
+            <button type="button" class="active" data-status="">全部</button>
+            <button type="button" data-status="pending">待处理</button>
+            <button type="button" data-status="processing">处理中</button>
+            <button type="button" data-status="completed">已完成</button>
+            <button type="button" data-status="failed">失败</button>
+        </div>
+
+        <div class="table-responsive wm-file-table-wrap">
+            <table class="table align-middle wm-file-table">
+                <thead>
+                <tr>
+                    <th>文件名</th>
+                    <th>类型</th>
+                    <th>大小</th>
+                    <th>状态</th>
+                    <th>更新时间</th>
+                    <th class="text-end">操作</th>
+                </tr>
+                </thead>
+                <tbody id="fileListBody">
+                <tr>
+                    <td colspan="6" class="text-center text-secondary py-4">正在加载文件...</td>
+                </tr>
+                </tbody>
+            </table>
         </div>
     </section>
 </main>
@@ -159,21 +207,30 @@
 <th:block th:replace="~{base :: bootstrapJs}"/>
 <script th:inline="javascript">
 (() => {
-    const root = document.querySelector('main.media-shell');
+    const root = document.querySelector('main.wm-media-shell');
     const media = root.dataset.media;
     const step = root.dataset.step;
-    let selectedFileId = null;
+    const state = {files: [], selectedFileId: null};
 
     const alertHost = document.getElementById('alertHost');
     const showAlert = (type, message) => {
         alertHost.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
     };
-    const formatSize = (n) => {
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+    const formatSize = n => {
         if (!n && n !== 0) return '-';
         const units = ['B', 'KB', 'MB', 'GB'];
         let size = Number(n), i = 0;
         while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
         return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    };
+    const formatDate = value => {
+        if (!value) return '-';
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return '-';
+        return d.toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'});
     };
     const api = async (url, options = {}) => {
         const res = await fetch(url, {credentials: 'same-origin', ...options});
@@ -184,50 +241,100 @@
         if (res.status === 204) return null;
         return res.json();
     };
-    const renderFiles = (host, files, selectable) => {
-        if (!host) return;
+    const normalizedStatus = file => {
+        const raw = String(file.processingStatus || '').toLowerCase();
+        if (file.errorMessage || raw === 'failed' || raw === 'error') return 'failed';
+        if (raw === 'processing' || raw === 'queued' || raw === 'running') return 'processing';
+        if (raw === 'completed' || raw === 'done' || file.hasWatermark) return 'completed';
+        return 'pending';
+    };
+    const statusMeta = file => {
+        const key = normalizedStatus(file);
+        if (key === 'failed') return {label: '失败', cls: 'danger'};
+        if (key === 'processing') return {label: '处理中', cls: 'primary'};
+        if (key === 'completed') return {label: file.hasWatermark ? '已加水印' : '已完成', cls: 'success'};
+        return {label: '待处理', cls: 'warning'};
+    };
+    const filteredFiles = () => {
+        const status = document.getElementById('statusFilter')?.value || '';
+        if (!status) return state.files;
+        return state.files.filter(file => normalizedStatus(file) === status);
+    };
+    const setStatusFilter = status => {
+        document.getElementById('statusFilter').value = status;
+        document.querySelectorAll('.wm-status-pills button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.status === status);
+        });
+        renderFiles();
+    };
+    const renderFiles = () => {
+        const host = document.getElementById('fileListBody');
+        const files = filteredFiles();
         if (!files.length) {
-            host.innerHTML = '<div class="text-center text-muted py-4">暂无文件</div>';
+            host.innerHTML = '<tr><td colspan="6" class="text-center text-secondary py-4">暂无匹配文件</td></tr>';
             return;
         }
-        host.innerHTML = files.map(f => `
-            <div class="file-row" data-id="${f.id}">
-                <div class="d-flex justify-content-between gap-3 flex-wrap">
-                    <div>
-                        <div class="fw-semibold">${f.filename}</div>
-                        <div class="small-muted">${formatSize(f.fileSize)} · ${f.mimeType || '-'} · ${f.processingStatus || 'pending'}</div>
-                    </div>
-                    <div class="d-flex gap-2 align-items-start">
-                        ${selectable ? `<button class="btn btn-sm btn-outline-primary select-file" data-id="${f.id}">选择</button>` : ''}
-                        <a class="btn btn-sm btn-outline-success" href="/api/v1/files/${f.id}/content">下载</a>
-                        <button class="btn btn-sm btn-outline-danger delete-file" data-id="${f.id}">删除</button>
-                    </div>
-                </div>
-            </div>`).join('');
+        host.innerHTML = files.map(file => {
+            const status = statusMeta(file);
+            const selectable = step === 'add';
+            const selected = state.selectedFileId === file.id;
+            return `
+                <tr class="${selected ? 'table-primary' : ''}" data-id="${file.id}">
+                    <td>
+                        <div class="fw-semibold">${escapeHtml(file.filename)}</div>
+                        <div class="text-secondary small">${escapeHtml(file.mimeType || '-')}</div>
+                    </td>
+                    <td>${escapeHtml((file.fileFormat || file.fileType || '-').toUpperCase())}</td>
+                    <td>${formatSize(file.fileSize)}</td>
+                    <td><span class="badge text-bg-${status.cls}">${status.label}</span></td>
+                    <td>${formatDate(file.updatedAt || file.createdAt)}</td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            ${selectable ? `<button class="btn btn-outline-primary select-file" data-id="${file.id}">选择</button>` : ''}
+                            <a class="btn btn-outline-success" href="/api/v1/files/${file.id}/content">下载</a>
+                            <button class="btn btn-outline-danger delete-file" data-id="${file.id}">删除</button>
+                        </div>
+                    </td>
+                </tr>`;
+        }).join('');
         host.querySelectorAll('.delete-file').forEach(btn => btn.addEventListener('click', async () => {
             if (!confirm('确定删除这个文件吗？')) return;
             await api(`/api/v1/files/${btn.dataset.id}`, {method: 'DELETE'});
+            if (state.selectedFileId === Number(btn.dataset.id)) clearSelection();
             showAlert('success', '文件已删除');
             await loadFiles();
         }));
         host.querySelectorAll('.select-file').forEach(btn => btn.addEventListener('click', () => {
-            selectedFileId = Number(btn.dataset.id);
-            document.querySelectorAll('.file-row').forEach(x => x.classList.remove('border-primary'));
-            btn.closest('.file-row').classList.add('border-primary');
-            const enqueueBtn = document.getElementById('enqueueBtn');
-            if (enqueueBtn) enqueueBtn.disabled = false;
+            const file = state.files.find(item => item.id === Number(btn.dataset.id));
+            if (!file) return;
+            state.selectedFileId = file.id;
+            document.getElementById('enqueueBtn')?.removeAttribute('disabled');
+            document.getElementById('selectedFileName').textContent = file.filename || `#${file.id}`;
+            document.getElementById('selectedFileMeta').textContent = `${formatSize(file.fileSize)} · ${file.mimeType || file.fileType || '-'}`;
+            renderFiles();
         }));
     };
+    const clearSelection = () => {
+        state.selectedFileId = null;
+        const btn = document.getElementById('enqueueBtn');
+        if (btn) btn.disabled = true;
+        const name = document.getElementById('selectedFileName');
+        const meta = document.getElementById('selectedFileMeta');
+        if (name) name.textContent = '尚未选择文件';
+        if (meta) meta.textContent = '请在下方文件列表点击“选择”。';
+    };
     const loadFiles = async () => {
-        const data = await api(`/api/v1/files?fileType=${encodeURIComponent(media)}&size=50`);
-        const files = data.content || [];
-        renderFiles(document.getElementById('fileList'), files, step === 'add');
-        renderFiles(document.getElementById('recentFiles'), files.slice(0, 5), false);
+        const q = document.getElementById('fileSearchInput')?.value.trim() || '';
+        const params = new URLSearchParams({fileType: media, size: '50'});
+        if (q) params.set('q', q);
+        const data = await api(`/api/v1/files?${params}`);
+        state.files = data.content || [];
+        renderFiles();
     };
     const uploadFiles = async () => {
         const input = document.getElementById('fileInput');
         const queue = document.getElementById('uploadQueue');
-        const files = Array.from(input.files || []);
+        const files = Array.from(input?.files || []);
         if (!files.length) {
             showAlert('warning', '请先选择文件');
             return;
@@ -235,17 +342,17 @@
         queue.innerHTML = '';
         for (const file of files) {
             const row = document.createElement('div');
-            row.className = 'small-muted mb-2';
-            row.textContent = `${file.name} 上传中...`;
+            row.className = 'wm-upload-queue-item';
+            row.innerHTML = `<span>${escapeHtml(file.name)}</span><span class="text-secondary">上传中...</span>`;
             queue.appendChild(row);
             const form = new FormData();
             form.append('mediaType', media);
             form.append('file', file);
             try {
                 await api('/api/v1/files', {method: 'POST', body: form});
-                row.innerHTML = `<span class="status-dot status-done"></span>${file.name} 上传成功`;
+                row.innerHTML = `<span>${escapeHtml(file.name)}</span><span class="badge text-bg-success">上传成功</span>`;
             } catch (e) {
-                row.innerHTML = `<span class="status-dot status-error"></span>${file.name} 上传失败`;
+                row.innerHTML = `<span>${escapeHtml(file.name)}</span><span class="badge text-bg-danger">上传失败</span>`;
             }
         }
         input.value = '';
@@ -253,15 +360,16 @@
     };
     const enqueue = async () => {
         const text = document.getElementById('watermarkText').value.trim();
-        if (!selectedFileId) return showAlert('warning', '请选择文件');
+        if (!state.selectedFileId) return showAlert('warning', '请先选择文件');
         if (!text) return showAlert('warning', '请输入水印文本');
         const job = await api('/api/v1/jobs/watermark', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Idempotency-Key': `${selectedFileId}-${Date.now()}`},
-            body: JSON.stringify({fileId: selectedFileId, watermarkText: text})
+            headers: {'Content-Type': 'application/json', 'Idempotency-Key': `${state.selectedFileId}-${Date.now()}`},
+            body: JSON.stringify({fileId: state.selectedFileId, watermarkText: text})
         });
         const host = document.getElementById('jobStatus');
-        host.innerHTML = `任务已提交：<code>${job.jobId}</code>，状态 ${job.status}`;
+        host.innerHTML = `任务已提交：<code>${escapeHtml(job.jobId)}</code>，状态 ${escapeHtml(job.status)}`;
+        showAlert('success', '水印任务已提交');
         pollJob(job.jobId, host);
     };
     const pollJob = (jobId, host) => {
@@ -270,8 +378,9 @@
             count++;
             try {
                 const job = await api(`/api/v1/jobs/${jobId}`);
-                host.innerHTML = `任务 <code>${jobId}</code>：${job.status}`;
-                if (['COMPLETED', 'FAILED'].includes(job.status) || count > 30) clearInterval(timer);
+                host.innerHTML = `任务 <code>${escapeHtml(jobId)}</code>：${escapeHtml(job.status)}`;
+                await loadFiles();
+                if (['COMPLETED', 'FAILED'].includes(String(job.status).toUpperCase()) || count > 30) clearInterval(timer);
             } catch (e) {
                 clearInterval(timer);
             }
@@ -280,13 +389,24 @@
 
     document.getElementById('uploadBtn')?.addEventListener('click', uploadFiles);
     document.getElementById('enqueueBtn')?.addEventListener('click', enqueue);
+    document.getElementById('searchFilesBtn')?.addEventListener('click', () => loadFiles().catch(e => showAlert('danger', e.message)));
+    document.getElementById('refreshFilesBtn')?.addEventListener('click', () => loadFiles().catch(e => showAlert('danger', e.message)));
+    document.getElementById('fileSearchInput')?.addEventListener('keydown', event => {
+        if (event.key === 'Enter') loadFiles().catch(e => showAlert('danger', e.message));
+    });
+    document.getElementById('statusFilter')?.addEventListener('change', event => setStatusFilter(event.target.value));
+    document.querySelectorAll('.wm-status-pills button').forEach(btn => {
+        btn.addEventListener('click', () => setStatusFilter(btn.dataset.status || ''));
+    });
     const dropZone = document.getElementById('dropZone');
     if (dropZone) {
         ['dragenter', 'dragover'].forEach(name => dropZone.addEventListener(name, e => {
-            e.preventDefault(); dropZone.classList.add('dragover');
+            e.preventDefault();
+            dropZone.classList.add('dragover');
         }));
         ['dragleave', 'drop'].forEach(name => dropZone.addEventListener(name, e => {
-            e.preventDefault(); dropZone.classList.remove('dragover');
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
         }));
         dropZone.addEventListener('drop', e => {
             document.getElementById('fileInput').files = e.dataTransfer.files;
