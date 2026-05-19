@@ -5,7 +5,6 @@
 # Phase 3：已移除 Flask 栈；保留 Worker（Redis Stream）+ 算法 utils 依赖。
 
 # Copilot Agent (Phase 3 orchestration / safety_gate / checkpoint)
--r copilot-agent/requirements.txt
 
 # Database & ORM（无 Flask-SQLAlchemy）
 PyMySQL==1.1.0
