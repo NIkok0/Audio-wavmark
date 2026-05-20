@@ -8,23 +8,64 @@
 <nav th:replace="~{base :: navbar}"></nav>
 <aside th:replace="~{base :: sidebar}"></aside>
 
-<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4" style="max-width:720px;">
-    <h1 class="h4 mb-3">问题反馈</h1>
-    <p class="text-secondary small">与 Flask 阶段一致：当前不写入数据库，仅前端演示。</p>
-    <form id="fb" class="card shadow-sm p-3">
-        <div class="mb-2"><label class="form-label">称呼</label><input class="form-control" name="name"/></div>
-        <div class="mb-2"><label class="form-label">联系方式</label><input class="form-control" name="contact"/></div>
-        <div class="mb-2"><label class="form-label">类型</label><input class="form-control" name="issue_type"/></div>
-        <div class="mb-2"><label class="form-label">标题</label><input class="form-control" name="title"/></div>
-        <div class="mb-3"><label class="form-label">描述</label><textarea class="form-control" name="description" rows="4"></textarea></div>
-        <button type="submit" class="btn btn-primary">提交</button>
-    </form>
+<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4">
+    <section class="wm-page-hero mb-4">
+        <div>
+            <span class="wm-kicker">Feedback</span>
+            <h1>问题反馈</h1>
+            <p>把使用过程中遇到的卡点记录下来，后续可以接入工单或邮件通知。</p>
+        </div>
+        <div class="wm-hero-sticker">
+            <i class="bi bi-chat-heart"></i>
+        </div>
+    </section>
+
+    <section class="wm-panel mx-auto" style="max-width: 760px;">
+        <form id="fb" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="name">称呼</label>
+                <input class="form-control" id="name" name="name" autocomplete="name" placeholder="你的名字"/>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="contact">联系方式</label>
+                <input class="form-control" id="contact" name="contact" autocomplete="email" placeholder="邮箱或手机号"/>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="issueType">类型</label>
+                <select class="form-select" id="issueType" name="issue_type">
+                    <option value="bug">功能异常</option>
+                    <option value="feature">功能建议</option>
+                    <option value="account">账号权限</option>
+                    <option value="other">其他问题</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="title">标题</label>
+                <input class="form-control" id="title" name="title" placeholder="一句话描述问题"/>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="description">描述</label>
+                <textarea class="form-control" id="description" name="description" rows="5" placeholder="请写下复现步骤、期望结果或补充说明"></textarea>
+            </div>
+            <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-send"></i>
+                    提交反馈
+                </button>
+                <span class="text-muted small">当前阶段仅做前端演示，暂未写入数据库。</span>
+            </div>
+        </form>
+        <div class="alert alert-success mt-3 d-none" id="feedbackMsg"></div>
+    </section>
 </main>
 <th:block th:replace="~{base :: bootstrapJs}"/>
 <script>
     document.getElementById('fb').addEventListener('submit', function (e) {
         e.preventDefault();
-        alert('感谢您的反馈！（演示：未调用后端）');
+        const msg = document.getElementById('feedbackMsg');
+        msg.textContent = '感谢反馈，内容已在页面端记录。后续接入反馈接口后会自动提交到后台。';
+        msg.classList.remove('d-none');
+        this.reset();
     });
 </script>
 </body>

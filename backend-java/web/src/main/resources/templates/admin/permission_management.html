@@ -3,94 +3,51 @@
 <head>
     <title>权限管理 - 数字水印系统</title>
     <th:block th:replace="~{base :: commonHead}"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
-    <style>
-        .admin-shell { max-width: 1220px; }
-        .page-title { font-weight: 800; display: flex; gap: 10px; align-items: center; }
-        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
-        .stat-card {
-            border-radius: 8px; color: #fff; padding: 20px; position: relative; overflow: hidden;
-            background: #0d6efd;
-        }
-        .stat-card:nth-child(2) { background: #198754; }
-        .stat-card:nth-child(3) { background: #fd7e14; }
-        .stat-card:nth-child(4) { background: #6f42c1; }
-        .stat-card i { position: absolute; right: 18px; top: 16px; font-size: 32px; opacity: .25; }
-        .stat-card strong { font-size: 30px; display: block; }
-        .user-card, .group-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; background: #fff; height: 100%; }
-        .avatar {
-            width: 42px; height: 42px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-            background: #0d6efd; color: #fff; font-weight: 700;
-        }
-        .role-badge { border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
-        .role-super_admin { background: #dc3545; color: #fff; }
-        .role-admin { background: #fd7e14; color: #fff; }
-        .role-member { background: #6c757d; color: #fff; }
-        .filter-band { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
-        .small-muted { color: #6b7280; font-size: .875rem; }
-    </style>
 </head>
 <body>
 <nav th:replace="~{base :: navbar}"></nav>
 <aside th:replace="~{base :: sidebar}"></aside>
 
 <main class="container py-4 with-sidebar admin-shell">
-    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
-        <h1 class="page-title h3 mb-0"><i class="bi bi-people-fill text-primary"></i>权限管理中心</h1>
-        <div class="d-flex gap-2">
+    <section class="wm-page-hero mb-4">
+        <div>
+            <span class="wm-kicker">Admin</span>
+            <h1 class="page-title h3 mb-1"><i class="bi bi-people-fill text-primary"></i> 权限管理</h1>
+            <p class="text-secondary mb-0">管理用户、角色、启停状态和用户分组。</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
             <button class="btn btn-outline-primary" id="refreshBtn" type="button"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
             <button class="btn btn-primary" id="newUserBtn" type="button"><i class="bi bi-person-plus"></i> 新建用户</button>
-            <button class="btn btn-success" id="newGroupBtn" type="button"><i class="bi bi-folder-plus"></i> 新建组</button>
+            <button class="btn btn-success" id="newGroupBtn" type="button"><i class="bi bi-folder-plus"></i> 新建分组</button>
         </div>
-    </div>
+    </section>
 
     <div id="alertHost"></div>
-
-    <div class="stat-grid mb-4">
-        <div class="stat-card"><i class="bi bi-people"></i><strong id="statTotal">-</strong><span>总用户数</span></div>
-        <div class="stat-card"><i class="bi bi-person-check"></i><strong id="statActive">-</strong><span>活跃用户</span></div>
+    <section class="stat-grid mb-4">
+        <div class="stat-card"><i class="bi bi-people"></i><strong id="statTotal">-</strong><span>用户总数</span></div>
+        <div class="stat-card"><i class="bi bi-person-check"></i><strong id="statActive">-</strong><span>启用用户</span></div>
         <div class="stat-card"><i class="bi bi-shield-lock"></i><strong id="statAdmins">-</strong><span>管理员</span></div>
         <div class="stat-card"><i class="bi bi-diagram-3"></i><strong id="statGroups">-</strong><span>用户组</span></div>
-    </div>
+    </section>
 
-    <div class="filter-band mb-4">
+    <section class="filter-band mb-4">
         <div class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label" for="searchInput">搜索用户</label>
-                <input class="form-control" id="searchInput" placeholder="用户名或邮箱"/>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="roleFilter">角色</label>
-                <select class="form-select" id="roleFilter">
-                    <option value="">全部角色</option>
-                    <option value="super_admin">超级管理员</option>
-                    <option value="admin">管理员</option>
-                    <option value="member">成员</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="activeFilter">状态</label>
-                <select class="form-select" id="activeFilter">
-                    <option value="">全部状态</option>
-                    <option value="true">启用</option>
-                    <option value="false">停用</option>
-                </select>
-            </div>
-            <div class="col-md-2 d-grid">
-                <button class="btn btn-primary" id="searchBtn" type="button"><i class="bi bi-search"></i> 查询</button>
-            </div>
+            <div class="col-md-4"><label class="form-label" for="searchInput">搜索用户</label><input class="form-control" id="searchInput" placeholder="用户名或邮箱"/></div>
+            <div class="col-md-3"><label class="form-label" for="roleFilter">角色</label><select class="form-select" id="roleFilter"><option value="">全部角色</option><option value="super_admin">超级管理员</option><option value="admin">管理员</option><option value="member">成员</option></select></div>
+            <div class="col-md-3"><label class="form-label" for="activeFilter">状态</label><select class="form-select" id="activeFilter"><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select></div>
+            <div class="col-md-2 d-grid"><button class="btn btn-primary" id="searchBtn" type="button"><i class="bi bi-search"></i> 搜索</button></div>
         </div>
-    </div>
+    </section>
 
     <ul class="nav nav-tabs" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#usersTab" type="button">用户管理</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#groupsTab" type="button">组管理</button></li>
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#usersTab" type="button">用户列表</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#groupsTab" type="button">用户分组</button></li>
     </ul>
-    <div class="tab-content bg-white border border-top-0 p-3">
+    <section class="tab-content wm-panel rounded-top-0">
         <div class="tab-pane fade show active" id="usersTab">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="h5 mb-0">用户列表</h2>
-                <button class="btn btn-outline-danger btn-sm" id="batchDeleteBtn" type="button"><i class="bi bi-trash"></i> 删除选中</button>
+                <button class="btn btn-outline-danger btn-sm" id="batchDeleteBtn" type="button"><i class="bi bi-trash"></i> 批量删除</button>
             </div>
             <div class="row g-3" id="usersList"></div>
             <div class="d-flex justify-content-between align-items-center mt-3">
@@ -102,16 +59,13 @@
         <div class="tab-pane fade" id="groupsTab">
             <div class="row g-3" id="groupsList"></div>
         </div>
-    </div>
+    </section>
 </main>
 
 <div class="modal fade" id="userModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <form class="modal-content" id="userForm">
-            <div class="modal-header">
-                <h5 class="modal-title" id="userModalTitle">用户</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+            <div class="modal-header"><h5 class="modal-title" id="userModalTitle">用户</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <input type="hidden" id="userId"/>
                 <div class="row g-3">
@@ -120,17 +74,14 @@
                     <div class="col-md-6 create-only"><label class="form-label">初始密码</label><input class="form-control" id="password" type="password" minlength="6"/></div>
                     <div class="col-md-6"><label class="form-label">角色</label><select class="form-select" id="role"><option value="member">成员</option><option value="admin">管理员</option><option value="super_admin">超级管理员</option></select></div>
                     <div class="col-md-4"><label class="form-label">保留天数</label><input class="form-control" id="retentionDays" type="number" min="1" max="365"/></div>
-                    <div class="col-md-8 d-flex align-items-end gap-4">
+                    <div class="col-md-8 d-flex align-items-end gap-4 flex-wrap">
                         <div class="form-check"><input class="form-check-input" type="checkbox" id="active"><label class="form-check-label" for="active">启用</label></div>
                         <div class="form-check"><input class="form-check-input" type="checkbox" id="embed"><label class="form-check-label" for="embed">允许嵌入水印</label></div>
                         <div class="form-check"><input class="form-check-input" type="checkbox" id="extract"><label class="form-check-label" for="extract">允许提取水印</label></div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="submit" class="btn btn-primary">保存</button>
-            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="submit" class="btn btn-primary">保存</button></div>
         </form>
     </div>
 </div>
@@ -138,18 +89,9 @@
 <div class="modal fade" id="groupsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">分配用户组</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="groupsUserId"/>
-                <div class="small-muted mb-2" id="groupsUserName"></div>
-                <div id="groupChecks"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">完成</button>
-            </div>
+            <div class="modal-header"><h5 class="modal-title">分配用户组</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><input type="hidden" id="groupsUserId"/><div class="small-muted mb-2" id="groupsUserName"></div><div id="groupChecks"></div></div>
+            <div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">完成</button></div>
         </div>
     </div>
 </div>
@@ -157,21 +99,13 @@
 <div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <form class="modal-content" id="groupForm">
-            <div class="modal-header">
-                <h5 class="modal-title" id="groupModalTitle">用户组</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+            <div class="modal-header"><h5 class="modal-title" id="groupModalTitle">用户组</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <input type="hidden" id="groupId"/>
-                <label class="form-label">组名</label>
-                <input class="form-control mb-3" id="groupName" required maxlength="64"/>
-                <label class="form-label">描述</label>
-                <textarea class="form-control" id="groupDescription" rows="4"></textarea>
+                <label class="form-label">名称</label><input class="form-control mb-3" id="groupName" required maxlength="64"/>
+                <label class="form-label">描述</label><textarea class="form-control" id="groupDescription" rows="4"></textarea>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="submit" class="btn btn-primary">保存</button>
-            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="submit" class="btn btn-primary">保存</button></div>
         </form>
     </div>
 </div>
@@ -184,97 +118,37 @@
     const groupsModal = new bootstrap.Modal(document.getElementById('groupsModal'));
     const groupModal = new bootstrap.Modal(document.getElementById('groupModal'));
     const alertHost = document.getElementById('alertHost');
-    const showAlert = (type, message) => {
-        alertHost.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
-    };
-    const api = async (url, options = {}) => {
-        const res = await fetch(url, {credentials: 'same-origin', headers: {'Content-Type': 'application/json', ...(options.headers || {})}, ...options});
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || `${res.status} ${res.statusText}`);
-        }
-        if (res.status === 204) return null;
-        return res.json();
-    };
+    const showAlert = (type, message) => { alertHost.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show">${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`; };
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const api = async (url, options = {}) => { const res = await fetch(url, {credentials: 'same-origin', headers: {'Content-Type': 'application/json', ...(options.headers || {})}, ...options}); if (!res.ok) { const text = await res.text(); throw new Error(text || `${res.status} ${res.statusText}`); } if (res.status === 204) return null; return res.json(); };
     const roleText = role => ({super_admin: '超级管理员', admin: '管理员', member: '成员'}[role] || role);
-    const renderStats = s => {
-        document.getElementById('statTotal').textContent = s.totalUsers ?? '-';
-        document.getElementById('statActive').textContent = s.activeUsers ?? '-';
-        document.getElementById('statAdmins').textContent = s.adminUsers ?? '-';
-        document.getElementById('statGroups').textContent = s.totalGroups ?? '-';
-    };
+    const renderStats = s => { document.getElementById('statTotal').textContent = s.totalUsers ?? '-'; document.getElementById('statActive').textContent = s.activeUsers ?? '-'; document.getElementById('statAdmins').textContent = s.adminUsers ?? '-'; document.getElementById('statGroups').textContent = s.totalGroups ?? '-'; };
+
     const renderUsers = () => {
         const host = document.getElementById('usersList');
         if (!state.users.length) {
             host.innerHTML = '<div class="col-12 text-center text-muted py-4">暂无用户</div>';
             return;
         }
-        host.innerHTML = state.users.map(u => `
-            <div class="col-lg-6 col-xl-4">
-                <div class="user-card">
-                    <div class="d-flex gap-3">
-                        <input class="form-check-input mt-2 user-select" type="checkbox" value="${u.id}">
-                        <div class="avatar">${(u.username || '?').slice(0,1).toUpperCase()}</div>
-                        <div class="flex-grow-1">
-                            <div class="fw-semibold">${u.username}</div>
-                            <div class="small-muted">${u.email}</div>
-                            <div class="mt-2">
-                                <span class="role-badge role-${u.role}">${roleText(u.role)}</span>
-                                <span class="badge ${u.active ? 'text-bg-success' : 'text-bg-secondary'}">${u.active ? '启用' : '停用'}</span>
-                            </div>
-                            <div class="small-muted mt-2">嵌入：${u.embed ? '允许' : '关闭'} · 提取：${u.extract ? '允许' : '关闭'} · 组：${(u.groupIds || []).length}</div>
-                            <div class="d-flex gap-2 flex-wrap mt-3">
-                                <button class="btn btn-sm btn-outline-primary edit-user" data-id="${u.id}">编辑</button>
-                                <button class="btn btn-sm btn-outline-secondary manage-groups" data-id="${u.id}">分组</button>
-                                <button class="btn btn-sm btn-outline-warning toggle-active" data-id="${u.id}">${u.active ? '停用' : '启用'}</button>
-                                <button class="btn btn-sm btn-outline-danger delete-user" data-id="${u.id}">删除</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>`).join('');
+        host.innerHTML = state.users.map(u => `<div class="col-lg-6 col-xl-4"><div class="user-card"><div class="d-flex gap-3"><input class="form-check-input mt-2 user-select" type="checkbox" value="${u.id}"><div class="avatar">${escapeHtml((u.username || '?').slice(0,1).toUpperCase())}</div><div class="flex-grow-1"><div class="fw-semibold">${escapeHtml(u.username)}</div><div class="small-muted">${escapeHtml(u.email)}</div><div class="mt-2"><span class="role-badge role-${escapeHtml(u.role)}">${roleText(u.role)}</span> <span class="badge ${u.active ? 'text-bg-success' : 'text-bg-secondary'}">${u.active ? '启用' : '停用'}</span></div><div class="small-muted mt-2">嵌入：${u.embed ? '允许' : '禁止'} / 提取：${u.extract ? '允许' : '禁止'} / 分组：${(u.groupIds || []).length}</div><div class="d-flex gap-2 flex-wrap mt-3"><button class="btn btn-sm btn-outline-primary edit-user" data-id="${u.id}">编辑</button><button class="btn btn-sm btn-outline-secondary manage-groups" data-id="${u.id}">分组</button><button class="btn btn-sm btn-outline-warning toggle-active" data-id="${u.id}">${u.active ? '停用' : '启用'}</button><button class="btn btn-sm btn-outline-danger delete-user" data-id="${u.id}">删除</button></div></div></div></div></div>`).join('');
         host.querySelectorAll('.edit-user').forEach(b => b.addEventListener('click', () => openUser(state.users.find(u => u.id === Number(b.dataset.id)))));
         host.querySelectorAll('.manage-groups').forEach(b => b.addEventListener('click', () => openGroups(state.users.find(u => u.id === Number(b.dataset.id)))));
-        host.querySelectorAll('.toggle-active').forEach(b => b.addEventListener('click', async () => {
-            const u = state.users.find(x => x.id === Number(b.dataset.id));
-            await api(`/api/v1/admin/users/${u.id}`, {method: 'PATCH', body: JSON.stringify({active: !u.active})});
-            await reload('用户状态已更新');
-        }));
-        host.querySelectorAll('.delete-user').forEach(b => b.addEventListener('click', async () => {
-            if (!confirm('确定删除该用户吗？该操作不可恢复。')) return;
-            await api(`/api/v1/admin/users/${b.dataset.id}`, {method: 'DELETE'});
-            await reload('用户已删除');
-        }));
-        document.getElementById('pageInfo').textContent = `第 ${state.page + 1} 页 · 共 ${state.total} 条`;
+        host.querySelectorAll('.toggle-active').forEach(b => b.addEventListener('click', async () => { const u = state.users.find(x => x.id === Number(b.dataset.id)); await api(`/api/v1/admin/users/${u.id}`, {method: 'PATCH', body: JSON.stringify({active: !u.active})}); await reload('用户状态已更新'); }));
+        host.querySelectorAll('.delete-user').forEach(b => b.addEventListener('click', async () => { if (!confirm('确定删除这个用户吗？')) return; await api(`/api/v1/admin/users/${b.dataset.id}`, {method: 'DELETE'}); await reload('用户已删除'); }));
+        document.getElementById('pageInfo').textContent = `第 ${state.page + 1} 页，共 ${state.total} 条`;
     };
+
     const renderGroups = () => {
         const host = document.getElementById('groupsList');
         if (!state.groups.length) {
-            host.innerHTML = '<div class="col-12 text-center text-muted py-4">暂无用户组</div>';
+            host.innerHTML = '<div class="col-12 text-center text-muted py-4">暂无分组</div>';
             return;
         }
-        host.innerHTML = state.groups.map(g => `
-            <div class="col-md-6 col-xl-4">
-                <div class="group-card">
-                    <div class="d-flex justify-content-between gap-3">
-                        <div>
-                            <div class="fw-semibold"><i class="bi bi-diagram-3 text-primary"></i> ${g.name}</div>
-                            <div class="small-muted mt-2">${g.description || '暂无描述'}</div>
-                        </div>
-                        <div class="btn-group btn-group-sm align-self-start">
-                            <button class="btn btn-outline-primary edit-group" data-id="${g.id}">编辑</button>
-                            <button class="btn btn-outline-danger delete-group" data-id="${g.id}">删除</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`).join('');
+        host.innerHTML = state.groups.map(g => `<div class="col-md-6 col-xl-4"><div class="group-card"><div class="d-flex justify-content-between gap-3"><div><div class="fw-semibold"><i class="bi bi-diagram-3 text-primary"></i> ${escapeHtml(g.name)}</div><div class="small-muted mt-2">${escapeHtml(g.description || '暂无描述')}</div></div><div class="btn-group btn-group-sm align-self-start"><button class="btn btn-outline-primary edit-group" data-id="${g.id}">编辑</button><button class="btn btn-outline-danger delete-group" data-id="${g.id}">删除</button></div></div></div></div>`).join('');
         host.querySelectorAll('.edit-group').forEach(b => b.addEventListener('click', () => openGroup(state.groups.find(g => g.id === Number(b.dataset.id)))));
-        host.querySelectorAll('.delete-group').forEach(b => b.addEventListener('click', async () => {
-            if (!confirm('确定删除该用户组吗？')) return;
-            await api(`/api/v1/admin/groups/${b.dataset.id}`, {method: 'DELETE'});
-            await reload('用户组已删除');
-        }));
+        host.querySelectorAll('.delete-group').forEach(b => b.addEventListener('click', async () => { if (!confirm('确定删除这个分组吗？')) return; await api(`/api/v1/admin/groups/${b.dataset.id}`, {method: 'DELETE'}); await reload('分组已删除'); }));
     };
+
     const loadStats = async () => renderStats(await api('/api/v1/admin/stats'));
     const loadGroups = async () => { state.groups = await api('/api/v1/admin/groups'); renderGroups(); };
     const loadUsers = async () => {
@@ -290,11 +164,9 @@
         state.total = data.totalElements || 0;
         renderUsers();
     };
-    const reload = async (message) => {
-        await Promise.all([loadStats(), loadGroups(), loadUsers()]);
-        if (message) showAlert('success', message);
-    };
-    const openUser = (u) => {
+    const reload = async message => { await Promise.all([loadStats(), loadGroups(), loadUsers()]); if (message) showAlert('success', message); };
+
+    const openUser = u => {
         document.getElementById('userForm').reset();
         document.getElementById('userId').value = u?.id || '';
         document.getElementById('userModalTitle').textContent = u ? '编辑用户' : '新建用户';
@@ -315,42 +187,30 @@
         }
         userModal.show();
     };
-    const openGroups = (u) => {
+
+    const openGroups = u => {
         document.getElementById('groupsUserId').value = u.id;
         document.getElementById('groupsUserName').textContent = `${u.username} 的用户组`;
-        document.getElementById('groupChecks').innerHTML = state.groups.map(g => `
-            <label class="d-flex align-items-start gap-2 border rounded p-2 mb-2">
-                <input class="form-check-input group-check" type="checkbox" value="${g.id}" ${u.groupIds?.includes(g.id) ? 'checked' : ''}>
-                <span><strong>${g.name}</strong><br><span class="small-muted">${g.description || ''}</span></span>
-            </label>`).join('') || '<div class="text-muted">暂无可分配用户组</div>';
-        document.querySelectorAll('.group-check').forEach(ch => ch.addEventListener('change', async () => {
-            const method = ch.checked ? 'POST' : 'DELETE';
-            await api(`/api/v1/admin/users/${u.id}/groups/${ch.value}`, {method});
-            await loadUsers();
-        }));
+        document.getElementById('groupChecks').innerHTML = state.groups.map(g => `<label class="d-flex align-items-start gap-2 border rounded p-2 mb-2"><input class="form-check-input group-check" type="checkbox" value="${g.id}" ${u.groupIds?.includes(g.id) ? 'checked' : ''}><span><strong>${escapeHtml(g.name)}</strong><br><span class="small-muted">${escapeHtml(g.description || '')}</span></span></label>`).join('') || '<div class="text-muted">暂无可用分组</div>';
+        document.querySelectorAll('.group-check').forEach(ch => ch.addEventListener('change', async () => { const method = ch.checked ? 'POST' : 'DELETE'; await api(`/api/v1/admin/users/${u.id}/groups/${ch.value}`, {method}); await loadUsers(); }));
         groupsModal.show();
     };
-    const openGroup = (g) => {
+
+    const openGroup = g => {
         document.getElementById('groupForm').reset();
         document.getElementById('groupId').value = g?.id || '';
-        document.getElementById('groupModalTitle').textContent = g ? '编辑用户组' : '新建用户组';
+        document.getElementById('groupModalTitle').textContent = g ? '编辑分组' : '新建分组';
         if (g) {
             document.getElementById('groupName').value = g.name;
             document.getElementById('groupDescription').value = g.description || '';
         }
         groupModal.show();
     };
+
     document.getElementById('userForm').addEventListener('submit', async e => {
         e.preventDefault();
         const id = document.getElementById('userId').value;
-        const body = {
-            username: document.getElementById('username').value.trim(),
-            email: document.getElementById('email').value.trim(),
-            role: document.getElementById('role').value,
-            active: document.getElementById('active').checked,
-            embed: document.getElementById('embed').checked,
-            extract: document.getElementById('extract').checked
-        };
+        const body = {username: document.getElementById('username').value.trim(), email: document.getElementById('email').value.trim(), role: document.getElementById('role').value, active: document.getElementById('active').checked, embed: document.getElementById('embed').checked, extract: document.getElementById('extract').checked};
         const retention = document.getElementById('retentionDays').value;
         if (retention) body.retentionDays = Number(retention);
         if (!id) body.password = document.getElementById('password').value;
@@ -358,21 +218,24 @@
         userModal.hide();
         await reload(id ? '用户已更新' : '用户已创建');
     });
+
     document.getElementById('groupForm').addEventListener('submit', async e => {
         e.preventDefault();
         const id = document.getElementById('groupId').value;
         const body = {name: document.getElementById('groupName').value.trim(), description: document.getElementById('groupDescription').value.trim()};
         await api(id ? `/api/v1/admin/groups/${id}` : '/api/v1/admin/groups', {method: id ? 'PATCH' : 'POST', body: JSON.stringify(body)});
         groupModal.hide();
-        await reload(id ? '用户组已更新' : '用户组已创建');
+        await reload(id ? '分组已更新' : '分组已创建');
     });
+
     document.getElementById('batchDeleteBtn').addEventListener('click', async () => {
         const ids = Array.from(document.querySelectorAll('.user-select:checked')).map(x => Number(x.value));
-        if (!ids.length) return showAlert('warning', '请先选择用户');
+        if (!ids.length) return showAlert('warning', '请选择要删除的用户');
         if (!confirm(`确定删除选中的 ${ids.length} 个用户吗？`)) return;
         await api('/api/v1/admin/users/batch-delete', {method: 'POST', body: JSON.stringify({userIds: ids})});
-        await reload('选中用户已删除');
+        await reload('用户已批量删除');
     });
+
     document.getElementById('newUserBtn').addEventListener('click', () => openUser(null));
     document.getElementById('newGroupBtn').addEventListener('click', () => openGroup(null));
     document.getElementById('refreshBtn').addEventListener('click', () => reload('已刷新').catch(e => showAlert('danger', e.message)));

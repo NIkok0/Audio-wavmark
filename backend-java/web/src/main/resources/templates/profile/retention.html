@@ -8,15 +8,44 @@
 <nav th:replace="~{base :: navbar}"></nav>
 <aside th:replace="~{base :: sidebar}"></aside>
 
-<main class="container py-4 with-sidebar" style="max-width:640px;">
-    <h1 class="h4 mb-3">文件保留天数</h1>
-    <p class="text-secondary small">对应接口 <code>PATCH /api/v1/users/me/retention</code>，范围 1–365。</p>
-    <div class="mb-3">
-        <label class="form-label" for="days">保留天数</label>
-        <input type="number" min="1" max="365" class="form-control" id="days" value="7"/>
-    </div>
-    <button type="button" class="btn btn-primary" id="saveBtn">保存</button>
-    <div class="alert alert-info mt-3 d-none" id="msg"></div>
+<main class="container py-4 with-sidebar">
+    <section class="wm-page-hero mb-4">
+        <div>
+            <span class="wm-kicker">Retention</span>
+            <h1>文件保留天数</h1>
+            <p>设置个人文件自动保留周期，减少长期堆积的临时素材。</p>
+        </div>
+        <div class="wm-hero-sticker">
+            <i class="bi bi-calendar2-week"></i>
+        </div>
+    </section>
+
+    <section class="wm-panel mx-auto" style="max-width: 680px;">
+        <div class="d-flex align-items-start gap-3 mb-4">
+            <div class="wm-icon-bubble">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div>
+                <h2 class="h5 mb-1">保留策略</h2>
+                <p class="text-muted mb-0">接口对应 <code>PATCH /api/v1/users/me/retention</code>，可设置 1 到 365 天。</p>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="days">保留天数</label>
+            <input type="number" min="1" max="365" class="form-control form-control-lg" id="days" value="7"/>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-primary" id="saveBtn">
+                <i class="bi bi-check2-circle"></i>
+                保存设置
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-days="7">7 天</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="30">30 天</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="90">90 天</button>
+        </div>
+        <div class="alert mt-3 d-none" id="msg"></div>
+    </section>
 </main>
 <th:block th:replace="~{base :: bootstrapJs}"/>
 <script>
@@ -24,10 +53,26 @@
         var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
         return m ? decodeURIComponent(m[1]) : '';
     }
+
+    document.querySelectorAll('[data-days]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.getElementById('days').value = this.dataset.days;
+        });
+    });
+
     document.getElementById('saveBtn').addEventListener('click', async function () {
-        const days = parseInt(document.getElementById('days').value, 10);
+        const daysInput = document.getElementById('days');
+        const days = parseInt(daysInput.value, 10);
         const msg = document.getElementById('msg');
-        msg.classList.add('d-none');
+        msg.className = 'alert mt-3 d-none';
+
+        if (!Number.isInteger(days) || days < 1 || days > 365) {
+            msg.classList.remove('d-none');
+            msg.classList.add('alert-warning');
+            msg.textContent = '请输入 1 到 365 之间的天数。';
+            return;
+        }
+
         const xsrf = readCookie('XSRF-TOKEN');
         const res = await fetch('/api/v1/users/me/retention', {
             method: 'PATCH',
@@ -35,10 +80,11 @@
             headers: Object.assign({'Content-Type': 'application/json'}, xsrf ? {'X-XSRF-TOKEN': xsrf} : {}),
             body: JSON.stringify({retentionDays: days})
         });
-        msg.classList.remove('d-none', 'alert-success', 'alert-danger');
+
+        msg.classList.remove('d-none');
         if (res.ok) {
             msg.classList.add('alert-success');
-            msg.textContent = '已保存';
+            msg.textContent = '已保存，新的文件保留天数为 ' + days + ' 天。';
         } else {
             msg.classList.add('alert-danger');
             msg.textContent = '保存失败：' + res.status + ' ' + await res.text();

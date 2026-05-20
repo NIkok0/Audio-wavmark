@@ -9,46 +9,105 @@
 <aside th:replace="~{base :: sidebar}"></aside>
 
 <main class="container py-4 with-sidebar">
-    <h1 class="h4 mb-3">搜索文件</h1>
-    <form class="row g-2 mb-4" method="get" th:action="@{/search}">
-        <div class="col-md-8">
-            <input class="form-control" name="q" placeholder="文件名关键字" th:value="${param.q}"/>
+    <section class="wm-page-hero mb-4">
+        <div>
+            <span class="wm-kicker">Search</span>
+            <h1>搜索文件</h1>
+            <p>按文件名关键字查找已上传的素材，快速回到对应任务流程。</p>
         </div>
-        <div class="col-md-4">
-            <button class="btn btn-primary w-100" type="submit">搜索</button>
+        <div class="wm-hero-sticker">
+            <i class="bi bi-search-heart"></i>
         </div>
-    </form>
-    <div id="results" class="small text-muted">在登录状态下通过 <code>GET /api/v1/files?q=...</code> 拉取结果。</div>
-    <table class="table table-sm table-striped d-none" id="tbl">
-        <thead><tr><th>ID</th><th>文件名</th><th>类型</th><th>大小</th><th>状态</th></tr></thead>
-        <tbody id="tbody"></tbody>
-    </table>
+    </section>
+
+    <section class="wm-panel mb-4">
+        <form class="row g-3 align-items-end" method="get" th:action="@{/search}">
+            <div class="col-lg-9">
+                <label class="form-label" for="query">文件名关键字</label>
+                <input class="form-control form-control-lg" id="query" name="q" placeholder="输入文件名、后缀或关键词" th:value="${param.q}"/>
+            </div>
+            <div class="col-lg-3">
+                <button class="btn btn-primary btn-lg w-100" type="submit">
+                    <i class="bi bi-search"></i>
+                    搜索
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <section class="wm-panel">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div>
+                <h2 class="h5 mb-1">结果列表</h2>
+                <p class="text-muted mb-0" id="results">登录后会通过 <code>GET /api/v1/files?q=...</code> 拉取结果。</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle wm-file-table d-none" id="tbl">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>文件名</th>
+                    <th>类型</th>
+                    <th>大小</th>
+                    <th>状态</th>
+                </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+    </section>
 </main>
 <th:block th:replace="~{base :: bootstrapJs}"/>
 <script>
+    function formatSize(bytes) {
+        if (!bytes && bytes !== 0) {
+            return '-';
+        }
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = Number(bytes);
+        let index = 0;
+        while (size >= 1024 && index < units.length - 1) {
+            size = size / 1024;
+            index++;
+        }
+        return size.toFixed(index === 0 ? 0 : 1) + ' ' + units[index];
+    }
+
     document.addEventListener('DOMContentLoaded', async function () {
         const params = new URLSearchParams(window.location.search);
         const q = (params.get('q') || '').trim();
         const results = document.getElementById('results');
         const tbl = document.getElementById('tbl');
         const tbody = document.getElementById('tbody');
+
         if (!q) {
             results.textContent = '请输入关键字后搜索。';
             return;
         }
-        const res = await fetch('/api/v1/files?q=' + encodeURIComponent(q) + '&page=0&size=20', {credentials: 'same-origin'});
-        if (!res.ok) {
-            results.textContent = '请求失败：' + res.status;
-            return;
+
+        try {
+            const res = await fetch('/api/v1/files?q=' + encodeURIComponent(q) + '&page=0&size=20', {credentials: 'same-origin'});
+            if (!res.ok) {
+                results.textContent = '请求失败：' + res.status;
+                return;
+            }
+            const data = await res.json();
+            const rows = data.content || [];
+            results.textContent = '共找到 ' + (data.totalElements || rows.length) + ' 条结果。';
+            tbl.classList.remove('d-none');
+            tbody.innerHTML = rows.map(function (f) {
+                return '<tr>'
+                    + '<td>' + f.id + '</td>'
+                    + '<td class="fw-semibold">' + (f.filename || '') + '</td>'
+                    + '<td><span class="badge text-bg-light">' + (f.fileType || '-') + '</span></td>'
+                    + '<td>' + formatSize(f.fileSize) + '</td>'
+                    + '<td>' + (f.processingStatus || '-') + '</td>'
+                    + '</tr>';
+            }).join('');
+        } catch (err) {
+            results.textContent = '搜索请求异常：' + err.message;
         }
-        const data = await res.json();
-        results.textContent = '共 ' + data.totalElements + ' 条';
-        tbl.classList.remove('d-none');
-        (data.content || []).forEach(function (f) {
-            var tr = document.createElement('tr');
-            tr.innerHTML = '<td>' + f.id + '</td><td>' + (f.filename || '') + '</td><td>' + (f.fileType || '') + '</td><td>' + f.fileSize + '</td><td>' + (f.processingStatus || '') + '</td>';
-            tbody.appendChild(tr);
-        });
     });
 </script>
 </body>
