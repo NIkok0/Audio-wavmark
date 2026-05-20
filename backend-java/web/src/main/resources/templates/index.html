@@ -9,7 +9,7 @@
 <nav th:replace="~{base :: navbar}"></nav>
 <aside th:replace="~{base :: sidebar}"></aside>
 
-<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4">
+<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ' wm-main-center'" class="container py-4">
     <section class="wm-page-hero mb-4">
         <div>
             <span class="wm-kicker">Watermark Studio</span>

@@ -8,7 +8,7 @@
 <nav th:replace="~{base :: navbar}"></nav>
 <aside th:replace="~{base :: sidebar}"></aside>
 
-<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ''" class="container py-4">
+<main th:classappend="${#authorization.expression('isAuthenticated()')} ? ' with-sidebar' : ' wm-main-center'" class="container py-4">
     <section class="wm-page-hero mb-4">
         <div>
             <span class="wm-kicker">Feedback</span>
@@ -20,7 +20,7 @@
         </div>
     </section>
 
-    <section class="wm-panel mx-auto" style="max-width: 760px;">
+    <section class="wm-panel wm-main-center-narrow">
         <form id="fb" class="row g-3">
             <div class="col-md-6">
                 <label class="form-label" for="name">称呼</label>
@@ -48,10 +48,7 @@
                 <textarea class="form-control" id="description" name="description" rows="5" placeholder="请写下复现步骤、期望结果或补充说明"></textarea>
             </div>
             <div class="col-12 d-flex flex-wrap align-items-center gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-send"></i>
-                    提交反馈
-                </button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> 提交反馈</button>
                 <span class="text-muted small">当前阶段仅做前端演示，暂未写入数据库。</span>
             </div>
         </form>
